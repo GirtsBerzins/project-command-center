@@ -1,8 +1,24 @@
-export default function StreamsPage() {
+import { createClient } from "@/lib/supabase/server"
+import { StreamsClient } from "./streams-client"
+
+export default async function StreamsPage() {
+  const supabase = await createClient()
+
+  const [{ data: streams }, { data: profiles }] = await Promise.all([
+    supabase
+      .from("streams")
+      .select("*, profiles(id, full_name)")
+      .order("created_at", { ascending: false }),
+    supabase
+      .from("profiles")
+      .select("id, full_name")
+      .order("full_name"),
+  ])
+
   return (
-    <div>
-      <h1 className="text-2xl font-bold mb-4">Streams</h1>
-      <p className="text-muted-foreground">Coming soon.</p>
-    </div>
+    <StreamsClient
+      initialStreams={streams ?? []}
+      profiles={profiles ?? []}
+    />
   )
 }
