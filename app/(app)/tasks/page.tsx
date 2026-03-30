@@ -1,8 +1,30 @@
-export default function TasksPage() {
+import { createClient } from "@/lib/supabase/server"
+import { TasksClient } from "./tasks-client"
+
+export default async function TasksPage() {
+  const supabase = await createClient()
+
+  const [{ data: tasks }, { data: streams }, { data: profiles }] = await Promise.all([
+    supabase
+      .from("tasks")
+      .select("*, profiles(id, full_name), streams(id, name)")
+      .order("created_at", { ascending: false }),
+    supabase
+      .from("streams")
+      .select("id, name")
+      .eq("status", "active")
+      .order("name"),
+    supabase
+      .from("profiles")
+      .select("id, full_name")
+      .order("full_name"),
+  ])
+
   return (
-    <div>
-      <h1 className="text-2xl font-bold mb-4">Tasks</h1>
-      <p className="text-muted-foreground">Coming soon.</p>
-    </div>
+    <TasksClient
+      initialTasks={tasks ?? []}
+      streams={streams ?? []}
+      profiles={profiles ?? []}
+    />
   )
 }
