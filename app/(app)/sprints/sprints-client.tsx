@@ -61,6 +61,19 @@ const STATUS_COLORS: Record<string, string> = {
   completed: "bg-green-100 text-green-700",
 }
 
+const STATUS_LV: Record<string, string> = {
+  planned:   "Plānots",
+  active:    "Aktīvs",
+  completed: "Pabeigts",
+}
+
+const TASK_STATUS_LV: Record<string, string> = {
+  todo:        "Darāmais",
+  in_progress: "Procesā",
+  review:      "Pārskatāmais",
+  done:        "Pabeigts",
+}
+
 // ─── Burnup chart data ────────────────────────────────────────────────────────
 function buildBurnupData(sprint: Sprint) {
   const sprintTasks = sprint.task_sprint.map((ts) => ts.tasks)
@@ -71,17 +84,16 @@ function buildBurnupData(sprint: Sprint) {
   const end   = new Date(sprint.end_date)
   const days  = Math.max(1, Math.round((end.getTime() - start.getTime()) / 86_400_000) + 1)
 
-  // For demo: distribute "done" tasks evenly across the sprint timeline
-  const doneTasks = sprintTasks.filter((t) => t.status === "done").length
+  const doneTasks  = sprintTasks.filter((t) => t.status === "done").length
   const donePerDay = doneTasks / days
 
   return Array.from({ length: days }, (_, i) => {
     const date = new Date(start)
     date.setDate(start.getDate() + i)
     return {
-      day: date.toLocaleDateString("en-US", { month: "short", day: "numeric" }),
-      Planned: total,
-      Completed: Math.min(doneTasks, Math.round(donePerDay * (i + 1))),
+      day:      date.toLocaleDateString("lv-LV", { month: "short", day: "numeric" }),
+      Plānots:  total,
+      Pabeigts: Math.min(doneTasks, Math.round(donePerDay * (i + 1))),
     }
   })
 }
@@ -94,15 +106,15 @@ interface Props {
 
 export function SprintsClient({ initialSprints, allTasks }: Props) {
   const supabase = createClient()
-  const [sprints, setSprints]           = useState<Sprint[]>(initialSprints)
-  const [sprintDialog, setSprintDialog] = useState(false)
+  const [sprints, setSprints]             = useState<Sprint[]>(initialSprints)
+  const [sprintDialog, setSprintDialog]   = useState(false)
   const [editingSprint, setEditingSprint] = useState<Sprint | null>(null)
-  const [deleteTarget, setDeleteTarget] = useState<Sprint | null>(null)
-  const [taskDialog, setTaskDialog]     = useState<Sprint | null>(null)
-  const [form, setForm]                 = useState<SprintForm>(EMPTY_SPRINT)
-  const [saving, setSaving]             = useState(false)
-  const [deleting, setDeleting]         = useState(false)
-  const [error, setError]               = useState<string | null>(null)
+  const [deleteTarget, setDeleteTarget]   = useState<Sprint | null>(null)
+  const [taskDialog, setTaskDialog]       = useState<Sprint | null>(null)
+  const [form, setForm]                   = useState<SprintForm>(EMPTY_SPRINT)
+  const [saving, setSaving]               = useState(false)
+  const [deleting, setDeleting]           = useState(false)
+  const [error, setError]                 = useState<string | null>(null)
   const [selectedTaskIds, setSelectedTaskIds] = useState<Set<string>>(new Set())
 
   function setField<K extends keyof SprintForm>(k: K, v: SprintForm[K]) {
@@ -130,9 +142,9 @@ export function SprintsClient({ initialSprints, allTasks }: Props) {
 
   // ── Save sprint ───────────────────────────────────────────────────────────
   async function handleSave() {
-    if (!form.name.trim())       { setError("Name is required"); return }
-    if (!form.start_date)         { setError("Start date is required"); return }
-    if (!form.end_date)           { setError("End date is required"); return }
+    if (!form.name.trim())   { setError("Nosaukums ir obligāts"); return }
+    if (!form.start_date)    { setError("Sākuma datums ir obligāts"); return }
+    if (!form.end_date)      { setError("Beigu datums ir obligāts"); return }
     setSaving(true); setError(null)
 
     const payload = {
@@ -148,7 +160,7 @@ export function SprintsClient({ initialSprints, allTasks }: Props) {
       )
     } else {
       const { data, error: e } = await supabase.from("sprints").insert(payload).select().single()
-      if (e || !data) { setError(e?.message ?? "Failed"); setSaving(false); return }
+      if (e || !data) { setError(e?.message ?? "Kļūda"); setSaving(false); return }
       setSprints((prev) => [{ ...data, task_sprint: [] }, ...prev])
     }
 
@@ -185,7 +197,6 @@ export function SprintsClient({ initialSprints, allTasks }: Props) {
         .in("task_id", toRemove)
     }
 
-    // Reflect locally
     setSprints((prev) =>
       prev.map((s) => {
         if (s.id !== taskDialog.id) return s
@@ -216,23 +227,23 @@ export function SprintsClient({ initialSprints, allTasks }: Props) {
     <div className="space-y-4">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold">Sprints</h1>
-          <p className="text-sm text-muted-foreground">{sprints.length} sprints total</p>
+          <h1 className="text-2xl font-bold">Sprinti</h1>
+          <p className="text-sm text-muted-foreground">{sprints.length} sprinti kopā</p>
         </div>
-        <Button onClick={openCreate}><Plus className="h-4 w-4" />New Sprint</Button>
+        <Button onClick={openCreate}><Plus className="h-4 w-4" />Jauns sprints</Button>
       </div>
 
       {sprints.length === 0 && (
-        <p className="text-muted-foreground py-12 text-center">No sprints yet.</p>
+        <p className="text-muted-foreground py-12 text-center">Vēl nav sprintu.</p>
       )}
 
       <div className="space-y-4">
         {sprints.map((sprint) => {
-          const tasks   = sprint.task_sprint.map((ts) => ts.tasks)
-          const total   = tasks.length
-          const done    = tasks.filter((t) => t.status === "done").length
-          const pct     = total > 0 ? Math.round((done / total) * 100) : 0
-          const burnup  = buildBurnupData(sprint)
+          const tasks  = sprint.task_sprint.map((ts) => ts.tasks)
+          const total  = tasks.length
+          const done   = tasks.filter((t) => t.status === "done").length
+          const pct    = total > 0 ? Math.round((done / total) * 100) : 0
+          const burnup = buildBurnupData(sprint)
 
           return (
             <Card key={sprint.id}>
@@ -242,19 +253,19 @@ export function SprintsClient({ initialSprints, allTasks }: Props) {
                     <div className="flex items-center gap-2">
                       <CardTitle className="text-base">{sprint.name}</CardTitle>
                       <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${STATUS_COLORS[sprint.status] ?? ""}`}>
-                        {sprint.status}
+                        {STATUS_LV[sprint.status] ?? sprint.status}
                       </span>
                     </div>
                     <div className="flex items-center gap-1 text-xs text-muted-foreground">
                       <CalendarRange className="h-3.5 w-3.5" />
-                      {new Date(sprint.start_date).toLocaleDateString("en-US", { dateStyle: "medium" })}
+                      {new Date(sprint.start_date).toLocaleDateString("lv-LV", { dateStyle: "medium" })}
                       {" — "}
-                      {new Date(sprint.end_date).toLocaleDateString("en-US", { dateStyle: "medium" })}
+                      {new Date(sprint.end_date).toLocaleDateString("lv-LV", { dateStyle: "medium" })}
                     </div>
                   </div>
                   <div className="flex gap-1">
                     <Button variant="outline" size="sm" className="h-8 text-xs" onClick={() => openTaskAssign(sprint)}>
-                      Assign tasks
+                      Piešķirt uzdevumus
                     </Button>
                     <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => openEdit(sprint)}>
                       <Pencil className="h-3.5 w-3.5" />
@@ -269,9 +280,9 @@ export function SprintsClient({ initialSprints, allTasks }: Props) {
               <CardContent>
                 <Tabs defaultValue="overview">
                   <TabsList className="h-7 mb-3">
-                    <TabsTrigger value="overview" className="text-xs h-6">Overview</TabsTrigger>
-                    <TabsTrigger value="chart" className="text-xs h-6">Burnup</TabsTrigger>
-                    <TabsTrigger value="tasks" className="text-xs h-6">Tasks ({total})</TabsTrigger>
+                    <TabsTrigger value="overview" className="text-xs h-6">Pārskats</TabsTrigger>
+                    <TabsTrigger value="chart" className="text-xs h-6">Pieaugums</TabsTrigger>
+                    <TabsTrigger value="tasks" className="text-xs h-6">Uzdevumi ({total})</TabsTrigger>
                   </TabsList>
 
                   <TabsContent value="overview" className="space-y-3 mt-0">
@@ -281,7 +292,7 @@ export function SprintsClient({ initialSprints, allTasks }: Props) {
                     <div className="space-y-1">
                       <div className="flex justify-between text-xs text-muted-foreground">
                         <span className="flex items-center gap-1">
-                          <CheckCircle2 className="h-3 w-3" /> {done}/{total} tasks done
+                          <CheckCircle2 className="h-3 w-3" /> {done}/{total} uzdevumi pabeigti
                         </span>
                         <span>{pct}%</span>
                       </div>
@@ -298,25 +309,25 @@ export function SprintsClient({ initialSprints, allTasks }: Props) {
                           <YAxis tick={{ fontSize: 10 }} />
                           <Tooltip contentStyle={{ fontSize: 12 }} />
                           <Legend wrapperStyle={{ fontSize: 12 }} />
-                          <Line type="monotone" dataKey="Planned"   stroke="#94a3b8" strokeWidth={2} dot={false} strokeDasharray="4 2" />
-                          <Line type="monotone" dataKey="Completed" stroke="#3b82f6" strokeWidth={2} dot={false} />
+                          <Line type="monotone" dataKey="Plānots"  stroke="#94a3b8" strokeWidth={2} dot={false} strokeDasharray="4 2" />
+                          <Line type="monotone" dataKey="Pabeigts" stroke="#3b82f6" strokeWidth={2} dot={false} />
                         </LineChart>
                       </ResponsiveContainer>
                     ) : (
-                      <p className="text-sm text-muted-foreground py-4 text-center">No tasks assigned yet.</p>
+                      <p className="text-sm text-muted-foreground py-4 text-center">Vēl nav piešķirtu uzdevumu.</p>
                     )}
                   </TabsContent>
 
                   <TabsContent value="tasks" className="mt-0">
                     {tasks.length === 0 ? (
-                      <p className="text-sm text-muted-foreground py-2">No tasks assigned.</p>
+                      <p className="text-sm text-muted-foreground py-2">Nav piešķirtu uzdevumu.</p>
                     ) : (
                       <div className="space-y-1">
                         {tasks.map((t) => (
                           <div key={t.id} className="flex items-center justify-between text-sm py-1 border-b last:border-0">
                             <span className={t.status === "done" ? "line-through text-muted-foreground" : ""}>{t.title}</span>
                             <Badge variant={t.status === "done" ? "secondary" : "outline"} className="text-xs h-5">
-                              {t.status.replace("_", " ")}
+                              {TASK_STATUS_LV[t.status] ?? t.status.replace("_", " ")}
                             </Badge>
                           </div>
                         ))}
@@ -334,34 +345,34 @@ export function SprintsClient({ initialSprints, allTasks }: Props) {
       <Dialog open={sprintDialog} onOpenChange={setSprintDialog}>
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
-            <DialogTitle>{editingSprint ? "Edit Sprint" : "New Sprint"}</DialogTitle>
+            <DialogTitle>{editingSprint ? "Rediģēt sprintu" : "Jauns sprints"}</DialogTitle>
           </DialogHeader>
           <div className="grid gap-3 py-1">
             <div className="space-y-1">
-              <Label htmlFor="sp-name">Name *</Label>
-              <Input id="sp-name" value={form.name} onChange={(e) => setField("name", e.target.value)} placeholder="Sprint 16 — Launch" />
+              <Label htmlFor="sp-name">Nosaukums *</Label>
+              <Input id="sp-name" value={form.name} onChange={(e) => setField("name", e.target.value)} placeholder="Sprints 16 — Laidiens" />
             </div>
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-1">
-                <Label htmlFor="sp-start">Start *</Label>
+                <Label htmlFor="sp-start">Sākums *</Label>
                 <Input id="sp-start" type="date" value={form.start_date} onChange={(e) => setField("start_date", e.target.value)} />
               </div>
               <div className="space-y-1">
-                <Label htmlFor="sp-end">End *</Label>
+                <Label htmlFor="sp-end">Beigas *</Label>
                 <Input id="sp-end" type="date" value={form.end_date} onChange={(e) => setField("end_date", e.target.value)} />
               </div>
             </div>
             <div className="space-y-1">
-              <Label htmlFor="sp-goals">Goals</Label>
-              <Textarea id="sp-goals" value={form.goals} onChange={(e) => setField("goals", e.target.value)} rows={2} placeholder="What should be achieved this sprint?" />
+              <Label htmlFor="sp-goals">Mērķi</Label>
+              <Textarea id="sp-goals" value={form.goals} onChange={(e) => setField("goals", e.target.value)} rows={2} placeholder="Ko vajadzētu sasniegt šajā sprintā?" />
             </div>
             <div className="space-y-1">
-              <Label>Status</Label>
+              <Label>Statuss</Label>
               <Select value={form.status} onValueChange={(v) => setField("status", v)}>
                 <SelectTrigger><SelectValue /></SelectTrigger>
                 <SelectContent>
-                  {["planned","active","completed"].map((s) => (
-                    <SelectItem key={s} value={s}>{s.charAt(0).toUpperCase() + s.slice(1)}</SelectItem>
+                  {(["planned","active","completed"] as const).map((s) => (
+                    <SelectItem key={s} value={s}>{STATUS_LV[s]}</SelectItem>
                   ))}
                 </SelectContent>
               </Select>
@@ -369,9 +380,9 @@ export function SprintsClient({ initialSprints, allTasks }: Props) {
             {error && <p className="text-sm text-destructive">{error}</p>}
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setSprintDialog(false)}>Cancel</Button>
+            <Button variant="outline" onClick={() => setSprintDialog(false)}>Atcelt</Button>
             <Button onClick={handleSave} disabled={saving}>
-              {saving ? "Saving…" : editingSprint ? "Save changes" : "Create sprint"}
+              {saving ? "Saglabā…" : editingSprint ? "Saglabāt izmaiņas" : "Izveidot sprintu"}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -381,11 +392,11 @@ export function SprintsClient({ initialSprints, allTasks }: Props) {
       <Dialog open={!!taskDialog} onOpenChange={(o) => { if (!o) setTaskDialog(null) }}>
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
-            <DialogTitle>Assign tasks — {taskDialog?.name}</DialogTitle>
+            <DialogTitle>Piešķirt uzdevumus — {taskDialog?.name}</DialogTitle>
           </DialogHeader>
           <div className="max-h-[340px] overflow-y-auto space-y-1 py-1">
             {allTasks.length === 0 && (
-              <p className="text-sm text-muted-foreground text-center py-4">No tasks available.</p>
+              <p className="text-sm text-muted-foreground text-center py-4">Nav pieejamu uzdevumu.</p>
             )}
             {allTasks.map((t) => (
               <label
@@ -405,15 +416,15 @@ export function SprintsClient({ initialSprints, allTasks }: Props) {
                   )}
                 </div>
                 <Badge variant="outline" className="text-[10px] h-4 shrink-0">
-                  {t.status.replace("_"," ")}
+                  {TASK_STATUS_LV[t.status] ?? t.status.replace("_"," ")}
                 </Badge>
               </label>
             ))}
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setTaskDialog(null)}>Cancel</Button>
+            <Button variant="outline" onClick={() => setTaskDialog(null)}>Atcelt</Button>
             <Button onClick={handleAssignTasks} disabled={saving}>
-              {saving ? "Saving…" : `Save (${selectedTaskIds.size} tasks)`}
+              {saving ? "Saglabā…" : `Saglabāt (${selectedTaskIds.size} uzdevumi)`}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -422,14 +433,14 @@ export function SprintsClient({ initialSprints, allTasks }: Props) {
       {/* ── Delete confirmation ──────────────────────────────────────────── */}
       <Dialog open={!!deleteTarget} onOpenChange={(o) => { if (!o) setDeleteTarget(null) }}>
         <DialogContent className="sm:max-w-sm">
-          <DialogHeader><DialogTitle>Delete sprint?</DialogTitle></DialogHeader>
+          <DialogHeader><DialogTitle>Dzēst sprintu?</DialogTitle></DialogHeader>
           <p className="text-sm text-muted-foreground">
-            <strong>{deleteTarget?.name}</strong> will be permanently deleted. Task assignments will also be removed.
+            <strong>{deleteTarget?.name}</strong> tiks neatgriezeniski dzēsts. Uzdevumu piešķīrumi arī tiks noņemti.
           </p>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setDeleteTarget(null)}>Cancel</Button>
+            <Button variant="outline" onClick={() => setDeleteTarget(null)}>Atcelt</Button>
             <Button variant="destructive" onClick={handleDelete} disabled={deleting}>
-              {deleting ? "Deleting…" : "Delete"}
+              {deleting ? "Dzēš…" : "Dzēst"}
             </Button>
           </DialogFooter>
         </DialogContent>

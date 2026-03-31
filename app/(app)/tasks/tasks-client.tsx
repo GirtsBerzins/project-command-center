@@ -55,10 +55,10 @@ const EMPTY_FORM: FormData = {
 }
 
 const COLUMNS: { id: string; label: string; color: string }[] = [
-  { id: "todo",        label: "Todo",        color: "border-t-slate-400" },
-  { id: "in_progress", label: "In Progress", color: "border-t-blue-400" },
-  { id: "review",      label: "Review",      color: "border-t-yellow-400" },
-  { id: "done",        label: "Done",        color: "border-t-green-400" },
+  { id: "todo",        label: "Darāmais",     color: "border-t-slate-400" },
+  { id: "in_progress", label: "Procesā",      color: "border-t-blue-400" },
+  { id: "review",      label: "Pārskatāmais", color: "border-t-yellow-400" },
+  { id: "done",        label: "Pabeigts",     color: "border-t-green-400" },
 ]
 
 const PRIORITY_COLORS: Record<string, string> = {
@@ -68,11 +68,18 @@ const PRIORITY_COLORS: Record<string, string> = {
   critical: "bg-red-100 text-red-700",
 }
 
+const PRIORITY_LV: Record<string, string> = {
+  low:      "Zema",
+  medium:   "Vidēja",
+  high:     "Augsta",
+  critical: "Kritiska",
+}
+
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 function PriorityBadge({ priority }: { priority: string }) {
   return (
     <span className={`text-xs font-medium px-1.5 py-0.5 rounded ${PRIORITY_COLORS[priority] ?? ""}`}>
-      {priority}
+      {PRIORITY_LV[priority] ?? priority}
     </span>
   )
 }
@@ -96,19 +103,19 @@ interface Props {
 
 export function TasksClient({ initialTasks, streams, profiles }: Props) {
   const supabase = createClient()
-  const [tasks, setTasks]           = useState<Task[]>(initialTasks)
-  const [dialogOpen, setDialogOpen] = useState(false)
-  const [editingTask, setEditingTask] = useState<Task | null>(null)
+  const [tasks, setTasks]               = useState<Task[]>(initialTasks)
+  const [dialogOpen, setDialogOpen]     = useState(false)
+  const [editingTask, setEditingTask]   = useState<Task | null>(null)
   const [deleteTarget, setDeleteTarget] = useState<Task | null>(null)
-  const [form, setForm]             = useState<FormData>(EMPTY_FORM)
-  const [saving, setSaving]         = useState(false)
-  const [deleting, setDeleting]     = useState(false)
-  const [error, setError]           = useState<string | null>(null)
+  const [form, setForm]                 = useState<FormData>(EMPTY_FORM)
+  const [saving, setSaving]             = useState(false)
+  const [deleting, setDeleting]         = useState(false)
+  const [error, setError]               = useState<string | null>(null)
 
-  // Filters
-  const [filterStream,   setFilterStream]   = useState("")
-  const [filterAssignee, setFilterAssignee] = useState("")
-  const [filterPriority, setFilterPriority] = useState("")
+  // Filters — "all" means no filter applied
+  const [filterStream,   setFilterStream]   = useState("all")
+  const [filterAssignee, setFilterAssignee] = useState("all")
+  const [filterPriority, setFilterPriority] = useState("all")
 
   // ── Realtime ──────────────────────────────────────────────────────────────
   useEffect(() => {
@@ -141,7 +148,7 @@ export function TasksClient({ initialTasks, streams, profiles }: Props) {
   // ── Drag & Drop ───────────────────────────────────────────────────────────
   async function onDragEnd(result: DropResult) {
     if (!result.destination) return
-    const taskId   = result.draggableId
+    const taskId    = result.draggableId
     const newStatus = result.destination.droppableId
 
     setTasks((prev) =>
@@ -152,9 +159,9 @@ export function TasksClient({ initialTasks, streams, profiles }: Props) {
 
   // ── Filtering ─────────────────────────────────────────────────────────────
   const filtered = tasks.filter((t) => {
-    if (filterStream   && t.stream_id   !== filterStream)   return false
-    if (filterAssignee && t.assignee_id !== filterAssignee) return false
-    if (filterPriority && t.priority    !== filterPriority) return false
+    if (filterStream   !== "all" && t.stream_id   !== filterStream)   return false
+    if (filterAssignee !== "all" && t.assignee_id !== filterAssignee) return false
+    if (filterPriority !== "all" && t.priority    !== filterPriority) return false
     return true
   })
 
@@ -192,7 +199,7 @@ export function TasksClient({ initialTasks, streams, profiles }: Props) {
 
   // ── Save ──────────────────────────────────────────────────────────────────
   async function handleSave() {
-    if (!form.title.trim()) { setError("Title is required"); return }
+    if (!form.title.trim()) { setError("Virsraksts ir obligāts"); return }
     setSaving(true); setError(null)
 
     const payload = {
@@ -224,18 +231,20 @@ export function TasksClient({ initialTasks, streams, profiles }: Props) {
     setDeleteTarget(null)
   }
 
+  const filtersActive = filterStream !== "all" || filterAssignee !== "all" || filterPriority !== "all"
+
   // ── Render ────────────────────────────────────────────────────────────────
   return (
     <div className="space-y-4 h-full">
       {/* Header */}
       <div className="flex items-center justify-between flex-wrap gap-3">
         <div>
-          <h1 className="text-2xl font-bold">Tasks</h1>
-          <p className="text-sm text-muted-foreground">{tasks.length} tasks total</p>
+          <h1 className="text-2xl font-bold">Uzdevumi</h1>
+          <p className="text-sm text-muted-foreground">{tasks.length} uzdevumi kopā</p>
         </div>
         <Button onClick={() => openCreate()}>
           <Plus className="h-4 w-4" />
-          New Task
+          Jauns uzdevums
         </Button>
       </div>
 
@@ -243,20 +252,20 @@ export function TasksClient({ initialTasks, streams, profiles }: Props) {
       <div className="flex gap-2 flex-wrap">
         <Select value={filterStream} onValueChange={setFilterStream}>
           <SelectTrigger className="h-8 w-[160px] text-xs">
-            <SelectValue placeholder="All streams" />
+            <SelectValue placeholder="Visas straumes" />
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value="">All streams</SelectItem>
+            <SelectItem value="all">Visas straumes</SelectItem>
             {streams.map((s) => <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>)}
           </SelectContent>
         </Select>
 
         <Select value={filterAssignee} onValueChange={setFilterAssignee}>
           <SelectTrigger className="h-8 w-[160px] text-xs">
-            <SelectValue placeholder="All assignees" />
+            <SelectValue placeholder="Visi izpildītāji" />
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value="">All assignees</SelectItem>
+            <SelectItem value="all">Visi izpildītāji</SelectItem>
             {profiles.map((p) => (
               <SelectItem key={p.id} value={p.id}>{p.full_name ?? p.id.slice(0, 8)}</SelectItem>
             ))}
@@ -265,24 +274,24 @@ export function TasksClient({ initialTasks, streams, profiles }: Props) {
 
         <Select value={filterPriority} onValueChange={setFilterPriority}>
           <SelectTrigger className="h-8 w-[140px] text-xs">
-            <SelectValue placeholder="All priorities" />
+            <SelectValue placeholder="Visas prioritātes" />
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value="">All priorities</SelectItem>
-            {["low","medium","high","critical"].map((p) => (
-              <SelectItem key={p} value={p}>{p}</SelectItem>
+            <SelectItem value="all">Visas prioritātes</SelectItem>
+            {(["low","medium","high","critical"] as const).map((p) => (
+              <SelectItem key={p} value={p}>{PRIORITY_LV[p]}</SelectItem>
             ))}
           </SelectContent>
         </Select>
 
-        {(filterStream || filterAssignee || filterPriority) && (
+        {filtersActive && (
           <Button
             variant="ghost"
             size="sm"
             className="h-8 text-xs"
-            onClick={() => { setFilterStream(""); setFilterAssignee(""); setFilterPriority("") }}
+            onClick={() => { setFilterStream("all"); setFilterAssignee("all"); setFilterPriority("all") }}
           >
-            Clear filters
+            Notīrīt filtrus
           </Button>
         )}
       </div>
@@ -364,7 +373,7 @@ export function TasksClient({ initialTasks, streams, profiles }: Props) {
                                   {task.due_date && (
                                     <span className="flex items-center gap-0.5 text-[11px]">
                                       <Calendar className="h-3 w-3" />
-                                      {new Date(task.due_date).toLocaleDateString("en-US", { month: "short", day: "numeric" })}
+                                      {new Date(task.due_date).toLocaleDateString("lv-LV", { month: "short", day: "numeric" })}
                                     </span>
                                   )}
                                   <Avatar name={task.profiles?.full_name} />
@@ -388,38 +397,44 @@ export function TasksClient({ initialTasks, streams, profiles }: Props) {
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
         <DialogContent className="sm:max-w-lg">
           <DialogHeader>
-            <DialogTitle>{editingTask ? "Edit Task" : "New Task"}</DialogTitle>
+            <DialogTitle>{editingTask ? "Rediģēt uzdevumu" : "Jauns uzdevums"}</DialogTitle>
           </DialogHeader>
 
           <div className="grid gap-3 py-1">
             <div className="space-y-1">
-              <Label htmlFor="t-title">Title *</Label>
-              <Input id="t-title" value={form.title} onChange={(e) => setField("title", e.target.value)} placeholder="Task title" />
+              <Label htmlFor="t-title">Virsraksts *</Label>
+              <Input id="t-title" value={form.title} onChange={(e) => setField("title", e.target.value)} placeholder="Uzdevuma nosaukums" />
             </div>
 
             <div className="space-y-1">
-              <Label htmlFor="t-desc">Description</Label>
-              <Textarea id="t-desc" value={form.description} onChange={(e) => setField("description", e.target.value)} rows={2} placeholder="Optional details…" />
+              <Label htmlFor="t-desc">Apraksts</Label>
+              <Textarea id="t-desc" value={form.description} onChange={(e) => setField("description", e.target.value)} rows={2} placeholder="Papildu informācija…" />
             </div>
 
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-1">
-                <Label>Stream</Label>
-                <Select value={form.stream_id} onValueChange={(v) => setField("stream_id", v)}>
-                  <SelectTrigger><SelectValue placeholder="None" /></SelectTrigger>
+                <Label>Straume</Label>
+                <Select
+                  value={form.stream_id || "none"}
+                  onValueChange={(v) => setField("stream_id", v === "none" ? "" : v)}
+                >
+                  <SelectTrigger><SelectValue placeholder="Nav" /></SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="">None</SelectItem>
+                    <SelectItem value="none">Nav</SelectItem>
                     {streams.map((s) => <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>)}
                   </SelectContent>
                 </Select>
               </div>
 
               <div className="space-y-1">
-                <Label>Assignee</Label>
-                <Select value={form.assignee_id} onValueChange={(v) => setField("assignee_id", v)}>
-                  <SelectTrigger><SelectValue placeholder="Unassigned" /></SelectTrigger>
+                <Label>Izpildītājs</Label>
+                <Select
+                  value={form.assignee_id || "none"}
+                  onValueChange={(v) => setField("assignee_id", v === "none" ? "" : v)}
+                >
+                  <SelectTrigger><SelectValue placeholder="Nav norādīts" /></SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="">Unassigned</SelectItem>
+                    <SelectItem value="none">Nav norādīts</SelectItem>
                     {profiles.map((p) => (
                       <SelectItem key={p.id} value={p.id}>{p.full_name ?? p.id.slice(0,8)}</SelectItem>
                     ))}
@@ -430,19 +445,19 @@ export function TasksClient({ initialTasks, streams, profiles }: Props) {
 
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-1">
-                <Label>Priority</Label>
+                <Label>Prioritāte</Label>
                 <Select value={form.priority} onValueChange={(v) => setField("priority", v)}>
                   <SelectTrigger><SelectValue /></SelectTrigger>
                   <SelectContent>
-                    {["low","medium","high","critical"].map((p) => (
-                      <SelectItem key={p} value={p}>{p}</SelectItem>
+                    {(["low","medium","high","critical"] as const).map((p) => (
+                      <SelectItem key={p} value={p}>{PRIORITY_LV[p]}</SelectItem>
                     ))}
                   </SelectContent>
                 </Select>
               </div>
 
               <div className="space-y-1">
-                <Label>Status</Label>
+                <Label>Statuss</Label>
                 <Select value={form.status} onValueChange={(v) => setField("status", v)}>
                   <SelectTrigger><SelectValue /></SelectTrigger>
                   <SelectContent>
@@ -454,11 +469,11 @@ export function TasksClient({ initialTasks, streams, profiles }: Props) {
 
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-1">
-                <Label htmlFor="t-due">Due date</Label>
+                <Label htmlFor="t-due">Termiņš</Label>
                 <Input id="t-due" type="date" value={form.due_date} onChange={(e) => setField("due_date", e.target.value)} />
               </div>
               <div className="space-y-1">
-                <Label htmlFor="t-est">Est. hours</Label>
+                <Label htmlFor="t-est">Plānotās stundas</Label>
                 <Input id="t-est" type="number" min={0} step={0.5} value={form.estimate_hours} onChange={(e) => setField("estimate_hours", e.target.value)} placeholder="0" />
               </div>
             </div>
@@ -467,9 +482,9 @@ export function TasksClient({ initialTasks, streams, profiles }: Props) {
           </div>
 
           <DialogFooter>
-            <Button variant="outline" onClick={() => setDialogOpen(false)}>Cancel</Button>
+            <Button variant="outline" onClick={() => setDialogOpen(false)}>Atcelt</Button>
             <Button onClick={handleSave} disabled={saving}>
-              {saving ? "Saving…" : editingTask ? "Save changes" : "Create task"}
+              {saving ? "Saglabā…" : editingTask ? "Saglabāt izmaiņas" : "Izveidot uzdevumu"}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -479,15 +494,15 @@ export function TasksClient({ initialTasks, streams, profiles }: Props) {
       <Dialog open={!!deleteTarget} onOpenChange={(o) => { if (!o) setDeleteTarget(null) }}>
         <DialogContent className="sm:max-w-sm">
           <DialogHeader>
-            <DialogTitle>Delete task?</DialogTitle>
+            <DialogTitle>Dzēst uzdevumu?</DialogTitle>
           </DialogHeader>
           <p className="text-sm text-muted-foreground">
-            <strong>{deleteTarget?.title}</strong> will be permanently deleted.
+            <strong>{deleteTarget?.title}</strong> tiks neatgriezeniski dzēsts.
           </p>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setDeleteTarget(null)}>Cancel</Button>
+            <Button variant="outline" onClick={() => setDeleteTarget(null)}>Atcelt</Button>
             <Button variant="destructive" onClick={handleDelete} disabled={deleting}>
-              {deleting ? "Deleting…" : "Delete"}
+              {deleting ? "Dzēš…" : "Dzēst"}
             </Button>
           </DialogFooter>
         </DialogContent>

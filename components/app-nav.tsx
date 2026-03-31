@@ -9,12 +9,12 @@ import { useRouter } from "next/navigation"
 import { Button } from "@/components/ui/button"
 
 const navItems = [
-  { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
-  { href: "/streams", label: "Streams", icon: Layers },
-  { href: "/tasks", label: "Tasks", icon: CheckSquare },
-  { href: "/sprints", label: "Sprints", icon: Zap },
-  { href: "/kpis", label: "KPIs", icon: BarChart2 },
-  { href: "/reports", label: "Reports", icon: FileText },
+  { href: "/dashboard", label: "Vadības panelis", icon: LayoutDashboard },
+  { href: "/streams",   label: "Straumes",        icon: Layers },
+  { href: "/tasks",     label: "Uzdevumi",         icon: CheckSquare },
+  { href: "/sprints",   label: "Sprinti",          icon: Zap },
+  { href: "/kpis",      label: "KPI",              icon: BarChart2 },
+  { href: "/reports",   label: "Atskaites",        icon: FileText },
 ]
 
 export function AppNav() {
@@ -60,7 +60,7 @@ export function AppNav() {
           onClick={handleSignOut}
         >
           <LogOut className="h-4 w-4" />
-          Sign out
+          Iziet
         </Button>
       </div>
     </aside>

@@ -49,59 +49,58 @@ function generateMarkdown(
   activeSprint: ActiveSprint | null,
 ): string {
   const fmt = (d: string) =>
-    new Date(d).toLocaleDateString("en-US", { dateStyle: "medium" })
+    new Date(d).toLocaleDateString("lv-LV", { dateStyle: "medium" })
 
   const highRisks = openRisks.filter((r) => r.impact === "high")
 
-  // Sprint health
-  let sprintSection = "No active sprint."
+  let sprintSection = "Nav aktīva sprinta."
   if (activeSprint) {
     const tasks = activeSprint.task_sprint.map((ts) => ts.tasks)
     const total = tasks.length
     const done  = tasks.filter((t) => t.status === "done").length
     const pct   = total > 0 ? Math.round((done / total) * 100) : 0
-    sprintSection = `**${activeSprint.name}** — ${done}/${total} tasks done (${pct}%)  \nEnds ${fmt(activeSprint.end_date)}`
+    sprintSection = `**${activeSprint.name}** — ${done}/${total} uzdevumi pabeigti (${pct}%)  \nBeidzas ${fmt(activeSprint.end_date)}`
   }
 
   const nextWeekFocus = [
-    delayedTasks.length > 0 && `Resolve ${delayedTasks.length} overdue task${delayedTasks.length > 1 ? "s" : ""}`,
-    highRisks.length > 0   && `Mitigate ${highRisks.length} high-impact risk${highRisks.length > 1 ? "s" : ""}`,
-    activeSprint           && `Complete sprint: ${activeSprint.name}`,
+    delayedTasks.length > 0 && `Atrisināt ${delayedTasks.length} nokavēt${delayedTasks.length > 1 ? "us" : "u"} uzdevum${delayedTasks.length > 1 ? "us" : "u"}`,
+    highRisks.length > 0   && `Mazināt ${highRisks.length} augst${highRisks.length > 1 ? "as" : "as"} ietekmes risk${highRisks.length > 1 ? "us" : "u"}`,
+    activeSprint           && `Pabeigt sprintu: ${activeSprint.name}`,
   ].filter(Boolean)
 
-  return `# Weekly Report — ${fmt(weekStart)} to ${fmt(weekEnd)}
+  return `# Nedēļas atskaite — ${fmt(weekStart)} līdz ${fmt(weekEnd)}
 
-## Sprint Health
+## Sprinta veselība
 ${sprintSection}
 
-## Completed This Week (${completedTasks.length})
+## Pabeigti šonedēļ (${completedTasks.length})
 ${completedTasks.length === 0
-  ? "_No tasks completed this week._"
+  ? "_Šonedēļ nav pabeigtu uzdevumu._"
   : completedTasks.map((t) =>
     `- **${t.title}**${t.streams ? ` _(${t.streams.name})_` : ""}${t.profiles?.full_name ? ` — ${t.profiles.full_name}` : ""}`
   ).join("\n")}
 
-## Delayed / Overdue (${delayedTasks.length})
+## Nokavētie uzdevumi (${delayedTasks.length})
 ${delayedTasks.length === 0
-  ? "_No overdue tasks._"
+  ? "_Nav nokavētu uzdevumu._"
   : delayedTasks.map((t) =>
-    `- **${t.title}** [${t.priority}]${t.streams ? ` _(${t.streams.name})_` : ""} — due ${fmt(t.due_date)}${t.profiles?.full_name ? ` (${t.profiles.full_name})` : ""}`
+    `- **${t.title}** [${t.priority}]${t.streams ? ` _(${t.streams.name})_` : ""} — termiņš ${fmt(t.due_date)}${t.profiles?.full_name ? ` (${t.profiles.full_name})` : ""}`
   ).join("\n")}
 
-## Top Risks (${openRisks.length} open)
+## Galvenie riski (${openRisks.length} atvērti)
 ${openRisks.length === 0
-  ? "_No open risks._"
+  ? "_Nav atvērtu risku._"
   : openRisks.slice(0, 5).map((r) =>
-    `- **${r.title}** — impact: ${r.impact}, probability: ${r.probability}${r.due_date ? `, due ${fmt(r.due_date)}` : ""}`
+    `- **${r.title}** — ietekme: ${r.impact}, varbūtība: ${r.probability}${r.due_date ? `, termiņš ${fmt(r.due_date)}` : ""}`
   ).join("\n")}
 
-## Next Week Focus
+## Nākamās nedēļas fokusu
 ${nextWeekFocus.length === 0
-  ? "_Keep current momentum._"
+  ? "_Saglabāt pašreizējo tempu._"
   : nextWeekFocus.map((f) => `- ${f}`).join("\n")}
 
 ---
-_Generated ${new Date().toLocaleString("en-US", { dateStyle: "medium", timeStyle: "short" })}_
+_Ģenerēts ${new Date().toLocaleString("lv-LV", { dateStyle: "medium", timeStyle: "short" })}_
 `
 }
 
@@ -129,9 +128,8 @@ export function ReportsClient({
   const md = generateMarkdown(weekStart, weekEnd, completedTasks, delayedTasks, openRisks, activeSprint)
 
   const fmt = (d: string) =>
-    new Date(d).toLocaleDateString("en-US", { dateStyle: "medium" })
+    new Date(d).toLocaleDateString("lv-LV", { dateStyle: "medium" })
 
-  // Sprint stats for header widget
   const sprintTasks = activeSprint?.task_sprint.map((ts) => ts.tasks) ?? []
   const sprintDone  = sprintTasks.filter((t) => t.status === "done").length
   const sprintTotal = sprintTasks.length
@@ -143,7 +141,7 @@ export function ReportsClient({
     const url  = URL.createObjectURL(blob)
     const a    = document.createElement("a")
     a.href     = url
-    a.download = `weekly-report-${weekStart}.md`
+    a.download = `nedelas-atskaite-${weekStart}.md`
     a.click()
     URL.revokeObjectURL(url)
   }
@@ -178,19 +176,19 @@ export function ReportsClient({
     <div className="space-y-4">
       <div className="flex items-center justify-between flex-wrap gap-3">
         <div>
-          <h1 className="text-2xl font-bold">Reports</h1>
+          <h1 className="text-2xl font-bold">Atskaites</h1>
           <p className="text-sm text-muted-foreground">
-            Week of {fmt(weekStart)} — {fmt(weekEnd)}
+            Nedēļa no {fmt(weekStart)} — {fmt(weekEnd)}
           </p>
         </div>
         <div className="flex gap-2">
           <Button variant="outline" onClick={handleExport}>
             <Download className="h-4 w-4" />
-            Export .md
+            Eksportēt .md
           </Button>
           <Button onClick={handleSave} disabled={saving}>
             <Save className="h-4 w-4" />
-            {saving ? "Saving…" : savedMsg ? "Saved!" : "Save report"}
+            {saving ? "Saglabā…" : savedMsg ? "Saglabāts!" : "Saglabāt atskaiti"}
           </Button>
         </div>
       </div>
@@ -203,7 +201,7 @@ export function ReportsClient({
               <CheckCircle2 className="h-4 w-4 text-green-500 shrink-0" />
               <div>
                 <p className="text-2xl font-bold">{completedTasks.length}</p>
-                <p className="text-xs text-muted-foreground">Completed this week</p>
+                <p className="text-xs text-muted-foreground">Pabeigti šonedēļ</p>
               </div>
             </div>
           </CardContent>
@@ -215,7 +213,7 @@ export function ReportsClient({
               <Clock className="h-4 w-4 text-red-500 shrink-0" />
               <div>
                 <p className="text-2xl font-bold">{delayedTasks.length}</p>
-                <p className="text-xs text-muted-foreground">Overdue tasks</p>
+                <p className="text-xs text-muted-foreground">Nokavētie uzdevumi</p>
               </div>
             </div>
           </CardContent>
@@ -227,7 +225,7 @@ export function ReportsClient({
               <AlertTriangle className="h-4 w-4 text-yellow-500 shrink-0" />
               <div>
                 <p className="text-2xl font-bold">{openRisks.length}</p>
-                <p className="text-xs text-muted-foreground">Open risks</p>
+                <p className="text-xs text-muted-foreground">Atvērtie riski</p>
               </div>
             </div>
           </CardContent>
@@ -240,7 +238,7 @@ export function ReportsClient({
               <div>
                 <p className="text-2xl font-bold">{sprintPct}%</p>
                 <p className="text-xs text-muted-foreground">
-                  {activeSprint ? `${activeSprint.name}` : "No active sprint"}
+                  {activeSprint ? activeSprint.name : "Nav aktīva sprinta"}
                 </p>
               </div>
             </div>
@@ -250,9 +248,9 @@ export function ReportsClient({
 
       <Tabs defaultValue="preview">
         <TabsList>
-          <TabsTrigger value="preview">Report Preview</TabsTrigger>
+          <TabsTrigger value="preview">Priekšskatījums</TabsTrigger>
           <TabsTrigger value="markdown">Markdown</TabsTrigger>
-          <TabsTrigger value="history">History ({reports.length})</TabsTrigger>
+          <TabsTrigger value="history">Vēsture ({reports.length})</TabsTrigger>
         </TabsList>
 
         {/* ── Preview tab ─────────────────────────────────────────────── */}
@@ -262,12 +260,12 @@ export function ReportsClient({
             <CardHeader className="pb-2">
               <CardTitle className="text-sm flex items-center gap-2">
                 <CheckCircle2 className="h-4 w-4 text-green-500" />
-                Completed This Week
+                Pabeigti šonedēļ
               </CardTitle>
             </CardHeader>
             <CardContent>
               {completedTasks.length === 0 ? (
-                <p className="text-sm text-muted-foreground">No tasks completed this week.</p>
+                <p className="text-sm text-muted-foreground">Šonedēļ nav pabeigtu uzdevumu.</p>
               ) : (
                 <div className="space-y-1.5">
                   {completedTasks.map((t) => (
@@ -288,12 +286,12 @@ export function ReportsClient({
             <CardHeader className="pb-2">
               <CardTitle className="text-sm flex items-center gap-2">
                 <Clock className="h-4 w-4 text-red-500" />
-                Overdue / Delayed
+                Nokavētie uzdevumi
               </CardTitle>
             </CardHeader>
             <CardContent>
               {delayedTasks.length === 0 ? (
-                <p className="text-sm text-muted-foreground">No overdue tasks.</p>
+                <p className="text-sm text-muted-foreground">Nav nokavētu uzdevumu.</p>
               ) : (
                 <div className="space-y-1.5">
                   {delayedTasks.map((t) => (
@@ -303,7 +301,7 @@ export function ReportsClient({
                       <Badge variant={t.priority === "critical" ? "destructive" : "outline"} className="text-xs h-5">
                         {t.priority}
                       </Badge>
-                      <span className="text-xs text-muted-foreground">due {fmt(t.due_date)}</span>
+                      <span className="text-xs text-muted-foreground">termiņš {fmt(t.due_date)}</span>
                     </div>
                   ))}
                 </div>
@@ -316,12 +314,12 @@ export function ReportsClient({
             <CardHeader className="pb-2">
               <CardTitle className="text-sm flex items-center gap-2">
                 <AlertTriangle className="h-4 w-4 text-yellow-500" />
-                Top Risks
+                Galvenie riski
               </CardTitle>
             </CardHeader>
             <CardContent>
               {openRisks.length === 0 ? (
-                <p className="text-sm text-muted-foreground">No open risks.</p>
+                <p className="text-sm text-muted-foreground">Nav atvērtu risku.</p>
               ) : (
                 <div className="space-y-2">
                   {openRisks.slice(0, 5).map((r) => (
@@ -331,15 +329,15 @@ export function ReportsClient({
                         <p>{r.title}</p>
                         <div className="flex gap-1.5 mt-0.5">
                           <span className={`text-[10px] px-1.5 py-0.5 rounded font-medium ${r.impact === "high" ? "bg-red-100 text-red-700" : "bg-yellow-100 text-yellow-700"}`}>
-                            {r.impact} impact
+                            {r.impact} ietekme
                           </span>
                           <span className="text-[10px] px-1.5 py-0.5 rounded bg-slate-100 text-slate-700 font-medium">
-                            {r.probability} prob.
+                            {r.probability} varbūt.
                           </span>
                         </div>
                       </div>
                       {r.due_date && (
-                        <span className="text-xs text-muted-foreground shrink-0">due {fmt(r.due_date)}</span>
+                        <span className="text-xs text-muted-foreground shrink-0">termiņš {fmt(r.due_date)}</span>
                       )}
                     </div>
                   ))}
@@ -357,7 +355,7 @@ export function ReportsClient({
               className="absolute top-2 right-2 h-7 text-xs"
               onClick={() => navigator.clipboard.writeText(md)}
             >
-              Copy
+              Kopēt
             </Button>
             <pre className="rounded-lg border bg-muted p-4 text-xs font-mono overflow-auto max-h-[500px] whitespace-pre-wrap">
               {md}
@@ -368,7 +366,7 @@ export function ReportsClient({
         {/* ── History tab ─────────────────────────────────────────────── */}
         <TabsContent value="history" className="mt-4">
           {reports.length === 0 ? (
-            <p className="text-muted-foreground py-8 text-center">No saved reports yet.</p>
+            <p className="text-muted-foreground py-8 text-center">Vēl nav saglabātu atskaišu.</p>
           ) : (
             <div className="space-y-2">
               {reports.map((r) => (
@@ -379,10 +377,10 @@ export function ReportsClient({
                         <FileText className="h-4 w-4 text-muted-foreground" />
                         <div>
                           <p className="text-sm font-medium">
-                            Week of {fmt(r.week_start)}
+                            Nedēļa no {fmt(r.week_start)}
                           </p>
                           <p className="text-xs text-muted-foreground">
-                            Saved {new Date(r.created_at).toLocaleString("en-US", { dateStyle: "medium", timeStyle: "short" })}
+                            Saglabāts {new Date(r.created_at).toLocaleString("lv-LV", { dateStyle: "medium", timeStyle: "short" })}
                           </p>
                         </div>
                       </div>
@@ -393,13 +391,13 @@ export function ReportsClient({
                           const url  = URL.createObjectURL(blob)
                           const a    = document.createElement("a")
                           a.href     = url
-                          a.download = `weekly-report-${r.week_start}.md`
+                          a.download = `nedelas-atskaite-${r.week_start}.md`
                           a.click()
                           URL.revokeObjectURL(url)
                         }}
                       >
                         <Download className="h-3.5 w-3.5" />
-                        Download
+                        Lejupielādēt
                       </Button>
                     </div>
                   </CardContent>

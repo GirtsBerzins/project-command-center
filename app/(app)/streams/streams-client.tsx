@@ -56,22 +56,29 @@ const EMPTY_FORM: FormData = {
 }
 
 const STATUS_OPTIONS = [
-  { value: "active", label: "Active" },
-  { value: "on_hold", label: "On Hold" },
-  { value: "completed", label: "Completed" },
-  { value: "cancelled", label: "Cancelled" },
+  { value: "active",    label: "Aktīvs" },
+  { value: "on_hold",   label: "Aizturēts" },
+  { value: "completed", label: "Pabeigts" },
+  { value: "cancelled", label: "Atcelts" },
 ]
+
+const STATUS_LV: Record<string, string> = {
+  active:    "Aktīvs",
+  on_hold:   "Aizturēts",
+  completed: "Pabeigts",
+  cancelled: "Atcelts",
+}
 
 function statusBadge(status: string) {
   const map: Record<string, "default" | "warning" | "secondary" | "destructive"> = {
-    active: "default",
-    on_hold: "warning",
+    active:    "default",
+    on_hold:   "warning",
     completed: "secondary",
     cancelled: "destructive",
   }
   return (
     <Badge variant={map[status] ?? "secondary"}>
-      {status.replace("_", " ")}
+      {STATUS_LV[status] ?? status}
     </Badge>
   )
 }
@@ -103,7 +110,6 @@ export function StreamsClient({ initialStreams, profiles }: Props) {
         (payload) => {
           if (payload.eventType === "INSERT") {
             const newStream = payload.new as Stream
-            // Attach profile from local list
             newStream.profiles =
               profiles.find((p) => p.id === newStream.owner_id) ?? null
             setStreams((prev) => [newStream, ...prev])
@@ -140,10 +146,10 @@ export function StreamsClient({ initialStreams, profiles }: Props) {
   function openEdit(stream: Stream) {
     setEditingStream(stream)
     setForm({
-      name: stream.name,
-      goal: stream.goal ?? "",
+      name:     stream.name,
+      goal:     stream.goal ?? "",
       owner_id: stream.owner_id ?? "",
-      status: stream.status,
+      status:   stream.status,
       deadline: stream.deadline ?? "",
       progress: stream.progress,
     })
@@ -157,15 +163,15 @@ export function StreamsClient({ initialStreams, profiles }: Props) {
 
   // ── Save ─────────────────────────────────────────────────────────────────
   async function handleSave() {
-    if (!form.name.trim()) { setError("Name is required"); return }
+    if (!form.name.trim()) { setError("Nosaukums ir obligāts"); return }
     setSaving(true)
     setError(null)
 
     const payload = {
-      name: form.name.trim(),
-      goal: form.goal.trim() || null,
+      name:     form.name.trim(),
+      goal:     form.goal.trim() || null,
       owner_id: form.owner_id || null,
-      status: form.status,
+      status:   form.status,
       deadline: form.deadline || null,
       progress: Number(form.progress),
     }
@@ -193,12 +199,12 @@ export function StreamsClient({ initialStreams, profiles }: Props) {
     <div className="space-y-4">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold">Streams</h1>
-          <p className="text-sm text-muted-foreground">{streams.length} streams total</p>
+          <h1 className="text-2xl font-bold">Straumes</h1>
+          <p className="text-sm text-muted-foreground">{streams.length} straumes kopā</p>
         </div>
         <Button onClick={openCreate}>
           <Plus className="h-4 w-4" />
-          New Stream
+          Jauna straume
         </Button>
       </div>
 
@@ -206,11 +212,11 @@ export function StreamsClient({ initialStreams, profiles }: Props) {
         <Table>
           <TableHeader>
             <TableRow>
-              <TableHead>Name</TableHead>
-              <TableHead>Owner</TableHead>
-              <TableHead>Status</TableHead>
+              <TableHead>Nosaukums</TableHead>
+              <TableHead>Īpašnieks</TableHead>
+              <TableHead>Statuss</TableHead>
               <TableHead>Progress</TableHead>
-              <TableHead>Deadline</TableHead>
+              <TableHead>Termiņš</TableHead>
               <TableHead className="w-[80px]" />
             </TableRow>
           </TableHeader>
@@ -218,7 +224,7 @@ export function StreamsClient({ initialStreams, profiles }: Props) {
             {streams.length === 0 && (
               <TableRow>
                 <TableCell colSpan={6} className="text-center text-muted-foreground py-8">
-                  No streams yet — create one to get started.
+                  Vēl nav straumju — izveidojiet pirmo.
                 </TableCell>
               </TableRow>
             )}
@@ -244,7 +250,7 @@ export function StreamsClient({ initialStreams, profiles }: Props) {
                 </TableCell>
                 <TableCell className="text-sm">
                   {stream.deadline
-                    ? new Date(stream.deadline).toLocaleDateString("en-US", { dateStyle: "medium" })
+                    ? new Date(stream.deadline).toLocaleDateString("lv-LV", { dateStyle: "medium" })
                     : <span className="text-muted-foreground">—</span>}
                 </TableCell>
                 <TableCell>
@@ -267,39 +273,40 @@ export function StreamsClient({ initialStreams, profiles }: Props) {
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
         <DialogContent className="sm:max-w-lg">
           <DialogHeader>
-            <DialogTitle>{editingStream ? "Edit Stream" : "New Stream"}</DialogTitle>
+            <DialogTitle>{editingStream ? "Rediģēt straumi" : "Jauna straume"}</DialogTitle>
           </DialogHeader>
 
           <div className="grid gap-4 py-2">
             <div className="space-y-1">
-              <Label htmlFor="s-name">Name *</Label>
+              <Label htmlFor="s-name">Nosaukums *</Label>
               <Input
                 id="s-name"
                 value={form.name}
                 onChange={(e) => setField("name", e.target.value)}
-                placeholder="Platform Modernisation"
+                placeholder="Platformas modernizācija"
               />
             </div>
 
             <div className="space-y-1">
-              <Label htmlFor="s-goal">Goal</Label>
+              <Label htmlFor="s-goal">Mērķis</Label>
               <Textarea
                 id="s-goal"
                 value={form.goal}
                 onChange={(e) => setField("goal", e.target.value)}
-                placeholder="What does this stream aim to achieve?"
+                placeholder="Ko šī straume plāno sasniegt?"
                 rows={2}
               />
             </div>
 
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-1">
-                <Label>Owner</Label>
-                <Select value={form.owner_id} onValueChange={(v) => setField("owner_id", v)}>
+                <Label>Īpašnieks</Label>
+                <Select value={form.owner_id || "none"} onValueChange={(v) => setField("owner_id", v === "none" ? "" : v)}>
                   <SelectTrigger>
-                    <SelectValue placeholder="Unassigned" />
+                    <SelectValue placeholder="Nav norādīts" />
                   </SelectTrigger>
                   <SelectContent>
+                    <SelectItem value="none">Nav norādīts</SelectItem>
                     {profiles.map((p) => (
                       <SelectItem key={p.id} value={p.id}>
                         {p.full_name ?? p.id.slice(0, 8)}
@@ -310,7 +317,7 @@ export function StreamsClient({ initialStreams, profiles }: Props) {
               </div>
 
               <div className="space-y-1">
-                <Label>Status</Label>
+                <Label>Statuss</Label>
                 <Select value={form.status} onValueChange={(v) => setField("status", v)}>
                   <SelectTrigger>
                     <SelectValue />
@@ -326,7 +333,7 @@ export function StreamsClient({ initialStreams, profiles }: Props) {
 
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-1">
-                <Label htmlFor="s-deadline">Deadline</Label>
+                <Label htmlFor="s-deadline">Termiņš</Label>
                 <Input
                   id="s-deadline"
                   type="date"
@@ -353,9 +360,9 @@ export function StreamsClient({ initialStreams, profiles }: Props) {
           </div>
 
           <DialogFooter>
-            <Button variant="outline" onClick={() => setDialogOpen(false)}>Cancel</Button>
+            <Button variant="outline" onClick={() => setDialogOpen(false)}>Atcelt</Button>
             <Button onClick={handleSave} disabled={saving}>
-              {saving ? "Saving…" : editingStream ? "Save changes" : "Create stream"}
+              {saving ? "Saglabā…" : editingStream ? "Saglabāt izmaiņas" : "Izveidot straumi"}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -365,16 +372,15 @@ export function StreamsClient({ initialStreams, profiles }: Props) {
       <Dialog open={!!deleteTarget} onOpenChange={(o) => { if (!o) setDeleteTarget(null) }}>
         <DialogContent className="sm:max-w-sm">
           <DialogHeader>
-            <DialogTitle>Delete stream?</DialogTitle>
+            <DialogTitle>Dzēst straumi?</DialogTitle>
           </DialogHeader>
           <p className="text-sm text-muted-foreground">
-            <strong>{deleteTarget?.name}</strong> will be permanently deleted. Tasks in this
-            stream will be unlinked but not deleted.
+            <strong>{deleteTarget?.name}</strong> tiks neatgriezeniski dzēsta. Uzdevumi šajā straumē tiks atvienoti, bet netiks dzēsti.
           </p>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setDeleteTarget(null)}>Cancel</Button>
+            <Button variant="outline" onClick={() => setDeleteTarget(null)}>Atcelt</Button>
             <Button variant="destructive" onClick={handleDelete} disabled={deleting}>
-              {deleting ? "Deleting…" : "Delete"}
+              {deleting ? "Dzēš…" : "Dzēst"}
             </Button>
           </DialogFooter>
         </DialogContent>

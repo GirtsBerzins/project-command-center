@@ -65,8 +65,8 @@ function pct(current: number, target: number) {
 
 function chartData(values: KpiValue[]) {
   return values.map((v) => ({
-    date: new Date(v.recorded_at).toLocaleDateString("en-US", { month: "short", day: "numeric" }),
-    Value: Number(v.value),
+    date:  new Date(v.recorded_at).toLocaleDateString("lv-LV", { month: "short", day: "numeric" }),
+    Vērtība: Number(v.value),
   }))
 }
 
@@ -78,15 +78,14 @@ interface Props {
 
 export function KpisClient({ initialKpis, profiles }: Props) {
   const supabase = createClient()
-  const [kpis, setKpis]             = useState<Kpi[]>(initialKpis)
-  const [dialogOpen, setDialogOpen] = useState(false)
-  const [editingKpi, setEditingKpi] = useState<Kpi | null>(null)
+  const [kpis, setKpis]               = useState<Kpi[]>(initialKpis)
+  const [dialogOpen, setDialogOpen]   = useState(false)
+  const [editingKpi, setEditingKpi]   = useState<Kpi | null>(null)
   const [deleteTarget, setDeleteTarget] = useState<Kpi | null>(null)
-  const [form, setForm]             = useState<KpiForm>(EMPTY_KPI)
-  const [saving, setSaving]         = useState(false)
-  const [deleting, setDeleting]     = useState(false)
-  const [error, setError]           = useState<string | null>(null)
-  // Record a new value for a KPI
+  const [form, setForm]               = useState<KpiForm>(EMPTY_KPI)
+  const [saving, setSaving]           = useState(false)
+  const [deleting, setDeleting]       = useState(false)
+  const [error, setError]             = useState<string | null>(null)
   const [recordingKpi, setRecordingKpi] = useState<Kpi | null>(null)
   const [newValue, setNewValue]         = useState("")
   const [recording, setRecording]       = useState(false)
@@ -112,18 +111,18 @@ export function KpisClient({ initialKpis, profiles }: Props) {
 
   // ── Save KPI ──────────────────────────────────────────────────────────────
   async function handleSave() {
-    if (!form.name.trim())      { setError("Name is required"); return }
-    if (!form.target)           { setError("Target is required"); return }
+    if (!form.name.trim()) { setError("Nosaukums ir obligāts"); return }
+    if (!form.target)      { setError("Mērķis ir obligāts"); return }
     setSaving(true); setError(null)
 
     const payload = {
-      name: form.name.trim(),
-      target:  Number(form.target),
-      current: Number(form.current),
-      unit:    form.unit.trim()    || null,
-      trend:   form.trend,
-      owner_id: form.owner_id || null,
-      period:  form.period.trim()  || null,
+      name:     form.name.trim(),
+      target:   Number(form.target),
+      current:  Number(form.current),
+      unit:     form.unit.trim()   || null,
+      trend:    form.trend,
+      owner_id: form.owner_id      || null,
+      period:   form.period.trim() || null,
     }
 
     if (editingKpi) {
@@ -134,10 +133,10 @@ export function KpisClient({ initialKpis, profiles }: Props) {
       )
     } else {
       const { data, error: e } = await supabase.from("kpis").insert(payload).select().single()
-      if (e || !data) { setError(e?.message ?? "Failed"); setSaving(false); return }
+      if (e || !data) { setError(e?.message ?? "Kļūda"); setSaving(false); return }
       setKpis((prev) => [{
         ...data,
-        profiles: profiles.find((p) => p.id === data.owner_id) ?? null,
+        profiles:   profiles.find((p) => p.id === data.owner_id) ?? null,
         kpi_values: [],
       }, ...prev])
     }
@@ -167,7 +166,6 @@ export function KpisClient({ initialKpis, profiles }: Props) {
       .single()
 
     if (!e && data) {
-      // Update current value on the KPI
       await supabase.from("kpis").update({ current: val }).eq("id", recordingKpi.id)
 
       setKpis((prev) =>
@@ -175,7 +173,7 @@ export function KpisClient({ initialKpis, profiles }: Props) {
           if (k.id !== recordingKpi.id) return k
           return {
             ...k,
-            current: val,
+            current:    val,
             kpi_values: [...k.kpi_values, data as KpiValue],
           }
         })
@@ -190,14 +188,14 @@ export function KpisClient({ initialKpis, profiles }: Props) {
     <div className="space-y-4">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold">KPIs</h1>
-          <p className="text-sm text-muted-foreground">{kpis.length} indicators tracked</p>
+          <h1 className="text-2xl font-bold">KPI rādītāji</h1>
+          <p className="text-sm text-muted-foreground">{kpis.length} rādītāji tiek sekoti</p>
         </div>
-        <Button onClick={openCreate}><Plus className="h-4 w-4" />New KPI</Button>
+        <Button onClick={openCreate}><Plus className="h-4 w-4" />Jauns KPI</Button>
       </div>
 
       {kpis.length === 0 && (
-        <p className="text-muted-foreground py-12 text-center">No KPIs yet — add one to start tracking.</p>
+        <p className="text-muted-foreground py-12 text-center">Vēl nav KPI — pievienojiet pirmo.</p>
       )}
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
@@ -224,7 +222,7 @@ export function KpisClient({ initialKpis, profiles }: Props) {
                       variant="outline" size="sm" className="h-7 text-xs"
                       onClick={() => { setRecordingKpi(kpi); setNewValue(String(kpi.current)) }}
                     >
-                      Record
+                      Reģistrēt
                     </Button>
                     <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => openEdit(kpi)}>
                       <Pencil className="h-3.5 w-3.5" />
@@ -246,13 +244,13 @@ export function KpisClient({ initialKpis, profiles }: Props) {
                     / {kpi.target}{kpi.unit ?? ""}
                   </span>
                   <span className={`ml-auto text-xs font-medium px-2 py-0.5 rounded-full mb-1 ${onTrack ? "bg-green-100 text-green-700" : "bg-red-100 text-red-700"}`}>
-                    {progress}% of target
+                    {progress}% no mērķa
                   </span>
                 </div>
 
                 {/* Owner */}
                 {kpi.profiles && (
-                  <p className="text-xs text-muted-foreground">Owner: {kpi.profiles.full_name}</p>
+                  <p className="text-xs text-muted-foreground">Īpašnieks: {kpi.profiles.full_name}</p>
                 )}
 
                 {/* History chart */}
@@ -263,13 +261,15 @@ export function KpisClient({ initialKpis, profiles }: Props) {
                       <XAxis dataKey="date" tick={{ fontSize: 9 }} tickLine={false} />
                       <YAxis tick={{ fontSize: 9 }} />
                       <Tooltip contentStyle={{ fontSize: 11 }} />
-                      <ReferenceLine y={kpi.target} stroke="#22c55e" strokeDasharray="4 2" strokeWidth={1.5} label={{ value: "Target", fontSize: 9, fill: "#22c55e" }} />
-                      <Line type="monotone" dataKey="Value" stroke="#3b82f6" strokeWidth={2} dot={{ r: 2 }} />
+                      <ReferenceLine y={kpi.target} stroke="#22c55e" strokeDasharray="4 2" strokeWidth={1.5} label={{ value: "Mērķis", fontSize: 9, fill: "#22c55e" }} />
+                      <Line type="monotone" dataKey="Vērtība" stroke="#3b82f6" strokeWidth={2} dot={{ r: 2 }} />
                     </LineChart>
                   </ResponsiveContainer>
                 ) : (
                   <p className="text-xs text-muted-foreground text-center py-2">
-                    {data.length === 0 ? "No history yet — record a value to start." : "Record more values to see a chart."}
+                    {data.length === 0
+                      ? "Vēl nav vēstures — reģistrējiet vērtību."
+                      : "Reģistrējiet vairāk vērtību, lai redzētu grafiku."}
                   </p>
                 )}
               </CardContent>
@@ -282,50 +282,53 @@ export function KpisClient({ initialKpis, profiles }: Props) {
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
-            <DialogTitle>{editingKpi ? "Edit KPI" : "New KPI"}</DialogTitle>
+            <DialogTitle>{editingKpi ? "Rediģēt KPI" : "Jauns KPI"}</DialogTitle>
           </DialogHeader>
           <div className="grid gap-3 py-1">
             <div className="space-y-1">
-              <Label htmlFor="k-name">Name *</Label>
-              <Input id="k-name" value={form.name} onChange={(e) => setField("name", e.target.value)} placeholder="Sprint Velocity" />
+              <Label htmlFor="k-name">Nosaukums *</Label>
+              <Input id="k-name" value={form.name} onChange={(e) => setField("name", e.target.value)} placeholder="Sprinta ātrums" />
             </div>
             <div className="grid grid-cols-3 gap-3">
               <div className="space-y-1">
-                <Label htmlFor="k-target">Target *</Label>
+                <Label htmlFor="k-target">Mērķis *</Label>
                 <Input id="k-target" type="number" step="any" value={form.target} onChange={(e) => setField("target", e.target.value)} placeholder="100" />
               </div>
               <div className="space-y-1">
-                <Label htmlFor="k-current">Current</Label>
+                <Label htmlFor="k-current">Pašreizējais</Label>
                 <Input id="k-current" type="number" step="any" value={form.current} onChange={(e) => setField("current", e.target.value)} placeholder="0" />
               </div>
               <div className="space-y-1">
-                <Label htmlFor="k-unit">Unit</Label>
+                <Label htmlFor="k-unit">Vienība</Label>
                 <Input id="k-unit" value={form.unit} onChange={(e) => setField("unit", e.target.value)} placeholder="%" />
               </div>
             </div>
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-1">
-                <Label>Trend</Label>
+                <Label>Tendence</Label>
                 <Select value={form.trend} onValueChange={(v) => setField("trend", v)}>
                   <SelectTrigger><SelectValue /></SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="up">Trending up</SelectItem>
-                    <SelectItem value="down">Trending down</SelectItem>
-                    <SelectItem value="stable">Stable</SelectItem>
+                    <SelectItem value="up">Pieaug</SelectItem>
+                    <SelectItem value="down">Samazinās</SelectItem>
+                    <SelectItem value="stable">Stabils</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
               <div className="space-y-1">
-                <Label htmlFor="k-period">Period</Label>
+                <Label htmlFor="k-period">Periods</Label>
                 <Input id="k-period" value={form.period} onChange={(e) => setField("period", e.target.value)} placeholder="Q2 2026" />
               </div>
             </div>
             <div className="space-y-1">
-              <Label>Owner</Label>
-              <Select value={form.owner_id} onValueChange={(v) => setField("owner_id", v)}>
-                <SelectTrigger><SelectValue placeholder="Unassigned" /></SelectTrigger>
+              <Label>Īpašnieks</Label>
+              <Select
+                value={form.owner_id || "none"}
+                onValueChange={(v) => setField("owner_id", v === "none" ? "" : v)}
+              >
+                <SelectTrigger><SelectValue placeholder="Nav norādīts" /></SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="">Unassigned</SelectItem>
+                  <SelectItem value="none">Nav norādīts</SelectItem>
                   {profiles.map((p) => (
                     <SelectItem key={p.id} value={p.id}>{p.full_name ?? p.id.slice(0, 8)}</SelectItem>
                   ))}
@@ -335,9 +338,9 @@ export function KpisClient({ initialKpis, profiles }: Props) {
             {error && <p className="text-sm text-destructive">{error}</p>}
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setDialogOpen(false)}>Cancel</Button>
+            <Button variant="outline" onClick={() => setDialogOpen(false)}>Atcelt</Button>
             <Button onClick={handleSave} disabled={saving}>
-              {saving ? "Saving…" : editingKpi ? "Save changes" : "Create KPI"}
+              {saving ? "Saglabā…" : editingKpi ? "Saglabāt izmaiņas" : "Izveidot KPI"}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -347,10 +350,10 @@ export function KpisClient({ initialKpis, profiles }: Props) {
       <Dialog open={!!recordingKpi} onOpenChange={(o) => { if (!o) setRecordingKpi(null) }}>
         <DialogContent className="sm:max-w-xs">
           <DialogHeader>
-            <DialogTitle>Record value — {recordingKpi?.name}</DialogTitle>
+            <DialogTitle>Reģistrēt vērtību — {recordingKpi?.name}</DialogTitle>
           </DialogHeader>
           <div className="space-y-2 py-1">
-            <Label htmlFor="rec-val">New value{recordingKpi?.unit ? ` (${recordingKpi.unit})` : ""}</Label>
+            <Label htmlFor="rec-val">Jaunā vērtība{recordingKpi?.unit ? ` (${recordingKpi.unit})` : ""}</Label>
             <Input
               id="rec-val"
               type="number"
@@ -361,13 +364,13 @@ export function KpisClient({ initialKpis, profiles }: Props) {
               autoFocus
             />
             <p className="text-xs text-muted-foreground">
-              Target: {recordingKpi?.target}{recordingKpi?.unit ?? ""}
+              Mērķis: {recordingKpi?.target}{recordingKpi?.unit ?? ""}
             </p>
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setRecordingKpi(null)}>Cancel</Button>
+            <Button variant="outline" onClick={() => setRecordingKpi(null)}>Atcelt</Button>
             <Button onClick={handleRecordValue} disabled={recording || !newValue}>
-              {recording ? "Saving…" : "Record"}
+              {recording ? "Saglabā…" : "Reģistrēt"}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -376,14 +379,14 @@ export function KpisClient({ initialKpis, profiles }: Props) {
       {/* ── Delete confirmation ──────────────────────────────────────────── */}
       <Dialog open={!!deleteTarget} onOpenChange={(o) => { if (!o) setDeleteTarget(null) }}>
         <DialogContent className="sm:max-w-sm">
-          <DialogHeader><DialogTitle>Delete KPI?</DialogTitle></DialogHeader>
+          <DialogHeader><DialogTitle>Dzēst KPI?</DialogTitle></DialogHeader>
           <p className="text-sm text-muted-foreground">
-            <strong>{deleteTarget?.name}</strong> and all its historical values will be permanently deleted.
+            <strong>{deleteTarget?.name}</strong> un visi tā vēsturiskie dati tiks neatgriezeniski dzēsti.
           </p>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setDeleteTarget(null)}>Cancel</Button>
+            <Button variant="outline" onClick={() => setDeleteTarget(null)}>Atcelt</Button>
             <Button variant="destructive" onClick={handleDelete} disabled={deleting}>
-              {deleting ? "Deleting…" : "Delete"}
+              {deleting ? "Dzēš…" : "Dzēst"}
             </Button>
           </DialogFooter>
         </DialogContent>
