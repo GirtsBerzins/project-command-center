@@ -1,64 +1,32 @@
 import { NextResponse, type NextRequest } from "next/server"
 
-export async function middleware(request: NextRequest) {
-  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
-  const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
+function hasSupabaseSessionCookie(request: NextRequest) {
+  const cookies = request.cookies.getAll()
+  return cookies.some((c) => c.name.startsWith("sb-") && c.name.endsWith("-auth-token"))
+}
 
-  // Edge runtime var fallback: never crash middleware if env is missing.
-  if (!supabaseUrl || !supabaseAnonKey) {
-    return NextResponse.next({ request })
+export function middleware(request: NextRequest) {
+  const { pathname } = request.nextUrl
+
+  // Public routes that do not require auth.
+  const publicPaths = ["/login", "/auth/callback"]
+  const isPublicPath = publicPaths.some((p) => pathname.startsWith(p))
+
+  const hasSession = hasSupabaseSessionCookie(request)
+
+  if (!hasSession && !isPublicPath) {
+    const url = request.nextUrl.clone()
+    url.pathname = "/login"
+    return NextResponse.redirect(url)
   }
 
-  let supabaseResponse = NextResponse.next({ request })
-
-  try {
-    const { createServerClient } = await import("@supabase/ssr")
-
-    const supabase = createServerClient(
-      supabaseUrl,
-      supabaseAnonKey,
-      {
-        cookies: {
-          getAll() {
-            return request.cookies.getAll()
-          },
-          setAll(cookiesToSet) {
-            cookiesToSet.forEach(({ name, value }) => request.cookies.set(name, value))
-            supabaseResponse = NextResponse.next({ request })
-            cookiesToSet.forEach(({ name, value, options }) =>
-              supabaseResponse.cookies.set(name, value, options)
-            )
-          },
-        },
-      }
-    )
-
-    // Refresh session if expired
-    const { data: { user } } = await supabase.auth.getUser()
-
-    const { pathname } = request.nextUrl
-
-    // Public routes that don't require auth
-    const publicPaths = ["/login", "/auth/callback"]
-    const isPublicPath = publicPaths.some((p) => pathname.startsWith(p))
-
-    if (!user && !isPublicPath) {
-      const url = request.nextUrl.clone()
-      url.pathname = "/login"
-      return NextResponse.redirect(url)
-    }
-
-    if (user && pathname === "/login") {
-      const url = request.nextUrl.clone()
-      url.pathname = "/dashboard"
-      return NextResponse.redirect(url)
-    }
-
-    return supabaseResponse
-  } catch {
-    // Never fail edge middleware invocation because of auth adapter/runtime mismatch.
-    return NextResponse.next({ request })
+  if (hasSession && pathname === "/login") {
+    const url = request.nextUrl.clone()
+    url.pathname = "/dashboard"
+    return NextResponse.redirect(url)
   }
+
+  return NextResponse.next()
 }
 
 export const config = {
