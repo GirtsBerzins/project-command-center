@@ -28,46 +28,50 @@ async function getCurrentUserAndRole() {
 }
 
 export async function GET() {
-  const { supabase, user } = await getCurrentUserAndRole()
-  if (!user) {
-    return NextResponse.json({ error: "Nav autorizācijas" }, { status: 401 })
-  }
-
-  const { data: profiles, error } = await supabase
-    .from("profiles")
-    .select("id, full_name, email, role, avatar_url, created_at")
-    .order("created_at", { ascending: true })
-
-  if (error) {
-    return NextResponse.json({ error: error.message }, { status: 400 })
-  }
-
-  const admin = createAdminClient()
-  const usersById = new Map<string, MemberStatus>()
-  let page = 1
-  const perPage = 200
-
-  while (true) {
-    const { data: pageData, error: usersError } = await admin.auth.admin.listUsers({ page, perPage })
-    if (usersError) {
-      return NextResponse.json({ error: usersError.message }, { status: 400 })
+  try {
+    const { supabase, user } = await getCurrentUserAndRole()
+    if (!user) {
+      return NextResponse.json({ error: "Nav autorizācijas" }, { status: 401 })
     }
 
-    const users = pageData.users ?? []
-    for (const u of users) {
-      usersById.set(u.id, u.email_confirmed_at ? "active" : "pending")
+    const { data: profiles, error } = await supabase
+      .from("profiles")
+      .select("id, full_name, email, role, avatar_url, created_at")
+      .order("created_at", { ascending: true })
+
+    if (error) {
+      return NextResponse.json({ error: error.message }, { status: 400 })
     }
 
-    if (users.length < perPage) break
-    page += 1
+    const admin = createAdminClient()
+    const usersById = new Map<string, MemberStatus>()
+    let page = 1
+    const perPage = 200
+
+    while (true) {
+      const { data: pageData, error: usersError } = await admin.auth.admin.listUsers({ page, perPage })
+      if (usersError) {
+        return NextResponse.json({ error: usersError.message }, { status: 400 })
+      }
+
+      const users = pageData.users ?? []
+      for (const u of users) {
+        usersById.set(u.id, u.email_confirmed_at ? "active" : "pending")
+      }
+
+      if (users.length < perPage) break
+      page += 1
+    }
+
+    const members = (profiles ?? []).map((p) => ({
+      ...p,
+      status: usersById.get(p.id) ?? "pending",
+    }))
+
+    return NextResponse.json({ members })
+  } catch (e) {
+    return NextResponse.json({ error: (e as Error).message || "Neizdevās ielādēt komandu" }, { status: 500 })
   }
-
-  const members = (profiles ?? []).map((p) => ({
-    ...p,
-    status: usersById.get(p.id) ?? "pending",
-  }))
-
-  return NextResponse.json({ members })
 }
 
 export async function POST(request: Request) {

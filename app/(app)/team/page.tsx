@@ -68,6 +68,16 @@ export default function TeamPage() {
 
   const [myRole, setMyRole] = useState<Role | null>(null)
 
+  async function readJsonSafe(res: Response) {
+    const raw = await res.text()
+    if (!raw) return {}
+    try {
+      return JSON.parse(raw) as Record<string, unknown>
+    } catch {
+      return {}
+    }
+  }
+
   async function loadData() {
     setLoading(true)
     setError(null)
@@ -76,13 +86,13 @@ export default function TeamPage() {
       fetch("/api/team"),
     ])
     setMyRole((me?.role as Role | null) ?? null)
-    const payload = await membersRes.json()
+    const payload = await readJsonSafe(membersRes)
     if (!membersRes.ok) {
-      setError(payload.error ?? "Neizdevās ielādēt komandu")
+      setError((payload.error as string | undefined) ?? "Neizdevās ielādēt komandu")
       setLoading(false)
       return
     }
-    setMembers(payload.members as TeamMember[])
+    setMembers((payload.members as TeamMember[] | undefined) ?? [])
     setLoading(false)
   }
 
@@ -124,17 +134,17 @@ export default function TeamPage() {
         role: inviteRole,
       }),
     })
-    const payload = await res.json()
+    const payload = await readJsonSafe(res)
     setInviting(false)
     if (!res.ok) {
-      setError(payload.error ?? "Neizdevās uzaicināt")
+      setError((payload.error as string | undefined) ?? "Neizdevās uzaicināt")
       return
     }
     setInviteOpen(false)
     setInviteName("")
     setInviteEmail("")
     setInviteRole("member")
-    setSuccess(`Uzaicinājums nosūtīts uz ${payload.email ?? inviteEmail}`)
+    setSuccess(`Uzaicinājums nosūtīts uz ${(payload.email as string | undefined) ?? inviteEmail}`)
     await loadData()
   }
 
@@ -146,12 +156,12 @@ export default function TeamPage() {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ action: "resend", email }),
     })
-    const payload = await res.json()
+    const payload = await readJsonSafe(res)
     if (!res.ok) {
-      setError(payload.error ?? "Neizdevās atkārtoti nosūtīt uzaicinājumu")
+      setError((payload.error as string | undefined) ?? "Neizdevās atkārtoti nosūtīt uzaicinājumu")
       return
     }
-    setSuccess(`Uzaicinājums nosūtīts uz ${payload.email ?? email}`)
+    setSuccess(`Uzaicinājums nosūtīts uz ${(payload.email as string | undefined) ?? email}`)
   }
 
   async function handleUpdateRole() {
@@ -162,10 +172,10 @@ export default function TeamPage() {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ userId: roleTarget.id, role: nextRole }),
     })
-    const payload = await res.json()
+    const payload = await readJsonSafe(res)
     setSavingRole(false)
     if (!res.ok) {
-      setError(payload.error ?? "Neizdevās atjaunināt lomu")
+      setError((payload.error as string | undefined) ?? "Neizdevās atjaunināt lomu")
       return
     }
     setMembers((prev) => prev.map((m) => (m.id === roleTarget.id ? { ...m, role: nextRole } : m)))
@@ -180,10 +190,10 @@ export default function TeamPage() {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ userId: removeTarget.id }),
     })
-    const payload = await res.json()
+    const payload = await readJsonSafe(res)
     setRemoving(false)
     if (!res.ok) {
-      setError(payload.error ?? "Neizdevās noņemt lietotāju")
+      setError((payload.error as string | undefined) ?? "Neizdevās noņemt lietotāju")
       return
     }
     setMembers((prev) => prev.filter((m) => m.id !== removeTarget.id))
