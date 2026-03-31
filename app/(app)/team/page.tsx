@@ -11,12 +11,14 @@ import { Pencil, Trash2, Users } from "lucide-react"
 import { createClient } from "@/lib/supabase/client"
 
 type Role = "owner" | "manager" | "member" | "viewer"
+type MemberStatus = "active" | "pending"
 interface TeamMember {
   id: string
   full_name: string | null
   email: string | null
   role: Role
   avatar_url: string | null
+  status: MemberStatus
 }
 
 const ROLE_LABELS: Record<Role, string> = {
@@ -38,6 +40,12 @@ function initials(name: string | null, email: string | null) {
   return "?"
 }
 
+function displayName(member: TeamMember) {
+  if (member.full_name?.trim()) return member.full_name
+  if (member.email) return member.email.split("@")[0]
+  return "Nezināms lietotājs"
+}
+
 export default function TeamPage() {
   const supabase = createClient()
   const [members, setMembers] = useState<TeamMember[]>([])
@@ -45,8 +53,11 @@ export default function TeamPage() {
   const [error, setError] = useState<string | null>(null)
 
   const [inviteOpen, setInviteOpen] = useState(false)
+  const [inviteName, setInviteName] = useState("")
   const [inviteEmail, setInviteEmail] = useState("")
+  const [inviteRole, setInviteRole] = useState<Role>("member")
   const [inviting, setInviting] = useState(false)
+  const [success, setSuccess] = useState<string | null>(null)
 
   const [roleTarget, setRoleTarget] = useState<TeamMember | null>(null)
   const [nextRole, setNextRole] = useState<Role>("member")
@@ -99,12 +110,19 @@ export default function TeamPage() {
   )
 
   async function handleInvite() {
-    if (!inviteEmail.trim()) return
+    if (!inviteEmail.trim() || !inviteName.trim()) return
     setInviting(true)
+    setError(null)
+    setSuccess(null)
     const res = await fetch("/api/team", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ email: inviteEmail }),
+      body: JSON.stringify({
+        action: "invite",
+        full_name: inviteName,
+        email: inviteEmail,
+        role: inviteRole,
+      }),
     })
     const payload = await res.json()
     setInviting(false)
@@ -113,7 +131,27 @@ export default function TeamPage() {
       return
     }
     setInviteOpen(false)
+    setInviteName("")
     setInviteEmail("")
+    setInviteRole("member")
+    setSuccess(`Uzaicinājums nosūtīts uz ${payload.email ?? inviteEmail}`)
+    await loadData()
+  }
+
+  async function handleResend(email: string) {
+    setError(null)
+    setSuccess(null)
+    const res = await fetch("/api/team", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ action: "resend", email }),
+    })
+    const payload = await res.json()
+    if (!res.ok) {
+      setError(payload.error ?? "Neizdevās atkārtoti nosūtīt uzaicinājumu")
+      return
+    }
+    setSuccess(`Uzaicinājums nosūtīts uz ${payload.email ?? email}`)
   }
 
   async function handleUpdateRole() {
@@ -166,6 +204,7 @@ export default function TeamPage() {
       </div>
 
       {error && <p className="text-sm text-destructive">{error}</p>}
+      {success && <p className="text-sm text-green-600">{success}</p>}
 
       <div className="rounded-md border">
         <Table>
@@ -174,13 +213,14 @@ export default function TeamPage() {
               <TableHead>Lietotājs</TableHead>
               <TableHead>E-pasts</TableHead>
               <TableHead>Loma</TableHead>
+              <TableHead>Statuss</TableHead>
               <TableHead className="w-[96px]" />
             </TableRow>
           </TableHeader>
           <TableBody>
             {!loading && sortedMembers.length === 0 && (
               <TableRow>
-                <TableCell colSpan={4} className="text-center text-muted-foreground py-8">
+                <TableCell colSpan={5} className="text-center text-muted-foreground py-8">
                   Nav komandas dalībnieku.
                 </TableCell>
               </TableRow>
@@ -196,12 +236,28 @@ export default function TeamPage() {
                         {initials(m.full_name, m.email)}
                       </span>
                     )}
-                    <span className="font-medium">{m.full_name ?? "Bez vārda"}</span>
+                    <span className="font-medium">{displayName(m)}</span>
                   </div>
                 </TableCell>
                 <TableCell className="text-sm">{m.email ?? "—"}</TableCell>
                 <TableCell>
                   <Badge variant={roleBadgeVariant(m.role)}>{ROLE_LABELS[m.role]}</Badge>
+                </TableCell>
+                <TableCell>
+                  <div className="flex items-center gap-2">
+                    <Badge variant={m.status === "active" ? "secondary" : "warning"}>
+                      {m.status === "active" ? "Aktīvs" : "Gaida aktivizāciju"}
+                    </Badge>
+                    {m.status === "pending" && m.email && canInvite && (
+                      <button
+                        type="button"
+                        className="text-xs text-primary underline underline-offset-2"
+                        onClick={() => handleResend(m.email!)}
+                      >
+                        Atkārtoti nosūtīt
+                      </button>
+                    )}
+                  </div>
                 </TableCell>
                 <TableCell>
                   <div className="flex gap-1">
@@ -235,9 +291,19 @@ export default function TeamPage() {
       <Dialog open={inviteOpen} onOpenChange={setInviteOpen}>
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
-            <DialogTitle>Uzaicināt jaunu lietotāju</DialogTitle>
+            <DialogTitle>Uzaicināt jaunu komandas locekli</DialogTitle>
           </DialogHeader>
-          <div className="space-y-1 py-1">
+          <div className="space-y-3 py-1">
+            <div className="space-y-1">
+              <Label htmlFor="invite-name">Vārds Uzvārds</Label>
+              <Input
+                id="invite-name"
+                value={inviteName}
+                onChange={(e) => setInviteName(e.target.value)}
+                placeholder="Jānis Bērziņš"
+              />
+            </div>
+            <div className="space-y-1">
             <Label htmlFor="invite-email">E-pasta adrese</Label>
             <Input
               id="invite-email"
@@ -246,11 +312,26 @@ export default function TeamPage() {
               onChange={(e) => setInviteEmail(e.target.value)}
               placeholder="persona@uznemums.lv"
             />
+            </div>
+            <div className="space-y-1">
+              <Label htmlFor="invite-role">Loma</Label>
+              <select
+                id="invite-role"
+                className="flex h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-sm"
+                value={inviteRole}
+                onChange={(e) => setInviteRole(e.target.value as Role)}
+              >
+                <option value="owner">Īpašnieks</option>
+                <option value="manager">Pārvaldnieks</option>
+                <option value="member">Dalībnieks</option>
+                <option value="viewer">Skatītājs</option>
+              </select>
+            </div>
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setInviteOpen(false)}>Atcelt</Button>
-            <Button onClick={handleInvite} disabled={inviting || !inviteEmail.trim()}>
-              {inviting ? "Sūta…" : "Uzaicināt"}
+            <Button onClick={handleInvite} disabled={inviting || !inviteEmail.trim() || !inviteName.trim()}>
+              {inviting ? "Sūta…" : "Nosūtīt uzaicinājumu"}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -299,6 +380,28 @@ export default function TeamPage() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      <div className="rounded-md border">
+        <Table>
+          <TableHeader>
+            <TableRow>
+              <TableHead>Darbība</TableHead>
+              <TableHead>Īpašnieks</TableHead>
+              <TableHead>Pārvaldnieks</TableHead>
+              <TableHead>Dalībnieks</TableHead>
+              <TableHead>Skatītājs</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            <TableRow><TableCell>Skatīt visu</TableCell><TableCell>✅</TableCell><TableCell>✅</TableCell><TableCell>✅</TableCell><TableCell>✅</TableCell></TableRow>
+            <TableRow><TableCell>Veidot uzdevumus</TableCell><TableCell>✅</TableCell><TableCell>✅</TableCell><TableCell>❌</TableCell><TableCell>❌</TableCell></TableRow>
+            <TableRow><TableCell>Rediģēt savus uzdevumus</TableCell><TableCell>✅</TableCell><TableCell>✅</TableCell><TableCell>✅</TableCell><TableCell>❌</TableCell></TableRow>
+            <TableRow><TableCell>Veidot sprintus/KPI</TableCell><TableCell>✅</TableCell><TableCell>✅</TableCell><TableCell>❌</TableCell><TableCell>❌</TableCell></TableRow>
+            <TableRow><TableCell>Pārvaldīt komandu</TableCell><TableCell>✅</TableCell><TableCell>✅</TableCell><TableCell>❌</TableCell><TableCell>❌</TableCell></TableRow>
+            <TableRow><TableCell>Dzēst datus</TableCell><TableCell>✅</TableCell><TableCell>❌</TableCell><TableCell>❌</TableCell><TableCell>❌</TableCell></TableRow>
+          </TableBody>
+        </Table>
+      </div>
     </div>
   )
 }
