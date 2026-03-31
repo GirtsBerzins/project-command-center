@@ -19,7 +19,7 @@ import {
 import { Plus, Pencil, Trash2, User, Calendar, GripVertical } from "lucide-react"
 
 // ─── Types ───────────────────────────────────────────────────────────────────
-interface Profile { id: string; full_name: string | null }
+interface Profile { id: string; full_name: string | null; email?: string | null }
 interface Stream  { id: string; name: string }
 
 interface Task {
@@ -267,7 +267,9 @@ export function TasksClient({ initialTasks, streams, profiles }: Props) {
           <SelectContent>
             <SelectItem value="all">Visi izpildītāji</SelectItem>
             {profiles.map((p) => (
-              <SelectItem key={p.id} value={p.id}>{p.full_name ?? p.id.slice(0, 8)}</SelectItem>
+              <SelectItem key={p.id} value={p.id}>
+                {p.full_name ?? p.id.slice(0, 8)}{p.email ? ` (${p.email})` : ""}
+              </SelectItem>
             ))}
           </SelectContent>
         </Select>
@@ -436,7 +438,9 @@ export function TasksClient({ initialTasks, streams, profiles }: Props) {
                   <SelectContent>
                     <SelectItem value="none">Nav norādīts</SelectItem>
                     {profiles.map((p) => (
-                      <SelectItem key={p.id} value={p.id}>{p.full_name ?? p.id.slice(0,8)}</SelectItem>
+                      <SelectItem key={p.id} value={p.id}>
+                        {p.full_name ?? p.id.slice(0, 8)}{p.email ? ` (${p.email})` : ""}
+                      </SelectItem>
                     ))}
                   </SelectContent>
                 </Select>

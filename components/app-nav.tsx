@@ -2,7 +2,7 @@
 
 import Link from "next/link"
 import { usePathname, useRouter } from "next/navigation"
-import { LayoutDashboard, Layers, CheckSquare, Zap, BarChart2, FileText, LogOut, FolderKanban } from "lucide-react"
+import { LayoutDashboard, Layers, CheckSquare, Zap, BarChart2, FileText, LogOut, FolderKanban, Users } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { createClient } from "@/lib/supabase/client"
 import { Button } from "@/components/ui/button"
@@ -18,6 +18,7 @@ interface StoredProject {
 const navItems = [
   { href: "/dashboard", label: "Vadības panelis", icon: LayoutDashboard },
   { href: "/projects",  label: "Projekti",        icon: FolderKanban },
+  { href: "/team",      label: "Komanda",         icon: Users },
   { href: "/streams",   label: "Straumes",        icon: Layers },
   { href: "/tasks",     label: "Uzdevumi",         icon: CheckSquare },
   { href: "/sprints",   label: "Sprinti",          icon: Zap },

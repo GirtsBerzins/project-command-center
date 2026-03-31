@@ -23,6 +23,7 @@ import { Pencil, Plus, Trash2 } from "lucide-react"
 interface Profile {
   id: string
   full_name: string | null
+  email?: string | null
 }
 
 interface Project {
@@ -348,7 +349,7 @@ export function StreamsClient({ initialStreams, profiles, projects }: Props) {
                     <SelectItem value="none">Nav norādīts</SelectItem>
                     {profiles.map((p) => (
                       <SelectItem key={p.id} value={p.id}>
-                        {p.full_name ?? p.id.slice(0, 8)}
+                        {p.full_name ?? p.id.slice(0, 8)}{p.email ? ` (${p.email})` : ""}
                       </SelectItem>
                     ))}
                   </SelectContent>

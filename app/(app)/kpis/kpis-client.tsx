@@ -19,7 +19,7 @@ import {
 import { Plus, Pencil, Trash2, TrendingUp, TrendingDown, Minus } from "lucide-react"
 
 // ─── Types ───────────────────────────────────────────────────────────────────
-interface Profile { id: string; full_name: string | null }
+interface Profile { id: string; full_name: string | null; email?: string | null }
 
 interface KpiValue {
   id: string
@@ -330,7 +330,9 @@ export function KpisClient({ initialKpis, profiles }: Props) {
                 <SelectContent>
                   <SelectItem value="none">Nav norādīts</SelectItem>
                   {profiles.map((p) => (
-                    <SelectItem key={p.id} value={p.id}>{p.full_name ?? p.id.slice(0, 8)}</SelectItem>
+                    <SelectItem key={p.id} value={p.id}>
+                      {p.full_name ?? p.id.slice(0, 8)}{p.email ? ` (${p.email})` : ""}
+                    </SelectItem>
                   ))}
                 </SelectContent>
               </Select>

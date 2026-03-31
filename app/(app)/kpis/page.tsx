@@ -9,13 +9,13 @@ export default async function KpisPage() {
       .from("kpis")
       .select(`
         *,
-        profiles(id, full_name),
+        profiles(id, full_name, email),
         kpi_values ( id, value, recorded_at )
       `)
       .order("created_at", { ascending: false }),
     supabase
       .from("profiles")
-      .select("id, full_name")
+      .select("id, full_name, email")
       .order("full_name"),
   ])
 

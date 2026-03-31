@@ -22,7 +22,7 @@ export default async function StreamsPage() {
       .order("created_at", { ascending: false }),
     supabase
       .from("profiles")
-      .select("id, full_name")
+      .select("id, full_name, email")
       .order("full_name"),
     supabase
       .from("projects")
