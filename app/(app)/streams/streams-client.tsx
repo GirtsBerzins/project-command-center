@@ -25,22 +25,39 @@ interface Profile {
   full_name: string | null
 }
 
+interface Project {
+  id: string
+  name: string
+}
+
+interface SprintSummary {
+  sprints?: {
+    id: string
+    name: string
+    status: string
+  } | null
+}
+
 interface Stream {
   id: string
   name: string
   goal: string | null
   owner_id: string | null
+  project_id: string | null
   status: string
   progress: number
   deadline: string | null
   created_at: string
   profiles: Profile | null
+  projects?: Project | null
+  sprint_streams?: SprintSummary[]
 }
 
 type FormData = {
   name: string
   goal: string
   owner_id: string
+  project_id: string
   status: string
   deadline: string
   progress: number
@@ -50,6 +67,7 @@ const EMPTY_FORM: FormData = {
   name: "",
   goal: "",
   owner_id: "",
+  project_id: "",
   status: "active",
   deadline: "",
   progress: 0,
@@ -87,9 +105,10 @@ function statusBadge(status: string) {
 interface Props {
   initialStreams: Stream[]
   profiles: Profile[]
+  projects: Project[]
 }
 
-export function StreamsClient({ initialStreams, profiles }: Props) {
+export function StreamsClient({ initialStreams, profiles, projects }: Props) {
   const supabase = createClient()
   const [streams, setStreams] = useState<Stream[]>(initialStreams)
   const [dialogOpen, setDialogOpen] = useState(false)
@@ -112,6 +131,8 @@ export function StreamsClient({ initialStreams, profiles }: Props) {
             const newStream = payload.new as Stream
             newStream.profiles =
               profiles.find((p) => p.id === newStream.owner_id) ?? null
+            newStream.projects =
+              projects.find((p) => p.id === newStream.project_id) ?? null
             setStreams((prev) => [newStream, ...prev])
           } else if (payload.eventType === "UPDATE") {
             setStreams((prev) =>
@@ -120,6 +141,8 @@ export function StreamsClient({ initialStreams, profiles }: Props) {
                 const updated = { ...s, ...(payload.new as Stream) }
                 updated.profiles =
                   profiles.find((p) => p.id === updated.owner_id) ?? null
+                updated.projects =
+                  projects.find((p) => p.id === updated.project_id) ?? null
                 return updated
               })
             )
@@ -149,6 +172,7 @@ export function StreamsClient({ initialStreams, profiles }: Props) {
       name:     stream.name,
       goal:     stream.goal ?? "",
       owner_id: stream.owner_id ?? "",
+      project_id: stream.project_id ?? "",
       status:   stream.status,
       deadline: stream.deadline ?? "",
       progress: stream.progress,
@@ -171,6 +195,7 @@ export function StreamsClient({ initialStreams, profiles }: Props) {
       name:     form.name.trim(),
       goal:     form.goal.trim() || null,
       owner_id: form.owner_id || null,
+      project_id: form.project_id || null,
       status:   form.status,
       deadline: form.deadline || null,
       progress: Number(form.progress),
@@ -213,6 +238,7 @@ export function StreamsClient({ initialStreams, profiles }: Props) {
           <TableHeader>
             <TableRow>
               <TableHead>Nosaukums</TableHead>
+              <TableHead>Projekts</TableHead>
               <TableHead>Īpašnieks</TableHead>
               <TableHead>Statuss</TableHead>
               <TableHead>Progress</TableHead>
@@ -229,18 +255,31 @@ export function StreamsClient({ initialStreams, profiles }: Props) {
               </TableRow>
             )}
             {streams.map((stream) => (
-              <TableRow key={stream.id}>
-                <TableCell>
-                  <div>
-                    <p className="font-medium">{stream.name}</p>
-                    {stream.goal && (
-                      <p className="text-xs text-muted-foreground line-clamp-1">{stream.goal}</p>
-                    )}
-                  </div>
-                </TableCell>
-                <TableCell className="text-sm">
-                  {stream.profiles?.full_name ?? <span className="text-muted-foreground">—</span>}
-                </TableCell>
+                <TableRow key={stream.id}>
+                  <TableCell>
+                    <div>
+                      <p className="font-medium">{stream.name}</p>
+                      {stream.goal && (
+                        <p className="text-xs text-muted-foreground line-clamp-1">{stream.goal}</p>
+                      )}
+                      {stream.sprint_streams && stream.sprint_streams.length > 0 && (
+                        <p className="text-[11px] text-muted-foreground mt-1">
+                          Aktīvie sprinti:{" "}
+                          {stream.sprint_streams
+                            .map((ss) => ss.sprints)
+                            .filter((s) => s && s.status === "active")
+                            .map((s) => s!.name)
+                            .join(", ") || "—"}
+                        </p>
+                      )}
+                    </div>
+                  </TableCell>
+                  <TableCell className="text-sm">
+                    {stream.projects?.name ?? <span className="text-muted-foreground">—</span>}
+                  </TableCell>
+                  <TableCell className="text-sm">
+                    {stream.profiles?.full_name ?? <span className="text-muted-foreground">—</span>}
+                  </TableCell>
                 <TableCell>{statusBadge(stream.status)}</TableCell>
                 <TableCell className="min-w-[140px]">
                   <div className="space-y-1">
@@ -316,6 +355,28 @@ export function StreamsClient({ initialStreams, profiles }: Props) {
                 </Select>
               </div>
 
+              <div className="space-y-1">
+                <Label>Projekts</Label>
+                <Select
+                  value={form.project_id || "none"}
+                  onValueChange={(v) => setField("project_id", v === "none" ? "" : v)}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Visi projekti" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="none">Nav norādīts</SelectItem>
+                    {projects.map((p) => (
+                      <SelectItem key={p.id} value={p.id}>
+                        {p.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-2 gap-3">
               <div className="space-y-1">
                 <Label>Statuss</Label>
                 <Select value={form.status} onValueChange={(v) => setField("status", v)}>
