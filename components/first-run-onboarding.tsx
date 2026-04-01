@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import Link from "next/link"
 import { Button } from "@/components/ui/button"
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog"
@@ -9,37 +9,53 @@ const ONBOARDING_KEY = "command-center:onboarding-v1-complete"
 
 export function FirstRunOnboarding({ showForOwner }: { showForOwner: boolean }) {
   const [dismissed, setDismissed] = useState(false)
+  // Start as "done" so server and client first-render both produce null —
+  // avoids React hydration mismatch. The real value is read in useEffect.
+  const [isDone, setIsDone] = useState(true)
+
+  useEffect(() => {
+    setIsDone(window.localStorage.getItem(ONBOARDING_KEY) === "1")
+  }, [])
 
   function closeAndPersist() {
-    if (typeof window !== "undefined") {
-      window.localStorage.setItem(ONBOARDING_KEY, "1")
-    }
+    window.localStorage.setItem(ONBOARDING_KEY, "1")
     setDismissed(true)
   }
 
-  if (!showForOwner || typeof window === "undefined") return null
+  if (!showForOwner) return null
 
-  const isDone = window.localStorage.getItem(ONBOARDING_KEY) === "1"
   const open = !dismissed && !isDone
 
   return (
     <Dialog open={open} onOpenChange={(nextOpen) => (!nextOpen ? closeAndPersist() : undefined)}>
       <DialogContent className="sm:max-w-lg">
         <DialogHeader>
-          <DialogTitle>Sākuma iestatīšana (1-2 min)</DialogTitle>
+          <DialogTitle>Laipni lūdzam Command Center! (1–2 min iestatīšana)</DialogTitle>
         </DialogHeader>
-        <ol className="list-decimal space-y-2 pl-5 text-sm text-muted-foreground">
-          <li>Pārbaudiet komandas piekļuves: uzaiciniet kolēģus un apstipriniet lomas.</li>
-          <li>Izveidojiet pirmo projektu un pārslēdzieties uz to kreisajā izvēlnē.</li>
-          <li>Izskrieniet smoke-testu: Dashboard, Projects, Team, Streams, Tasks, KPI.</li>
+        <p className="text-sm text-muted-foreground">
+          Šeit ir trīs soļi, lai sāktu darbu:
+        </p>
+        <ol className="list-decimal space-y-3 pl-5 text-sm text-muted-foreground">
+          <li>
+            <strong className="text-foreground">Uzaiciniet kolēģus</strong> — dodieties uz{" "}
+            <Link href="/team" className="underline underline-offset-2 hover:text-foreground" onClick={closeAndPersist}>
+              Komanda
+            </Link>{" "}
+            un nosūtiet uzaicinājumus.
+          </li>
+          <li>
+            <strong className="text-foreground">Izveidojiet pirmo projektu</strong> — dodieties uz{" "}
+            <Link href="/projects" className="underline underline-offset-2 hover:text-foreground" onClick={closeAndPersist}>
+              Projekti
+            </Link>
+            , nospiediet <em>Jauns projekts</em> un noklikšķiniet uz tā nosaukuma, lai to aktivizētu.
+          </li>
+          <li>
+            <strong className="text-foreground">Pievienojiet straumes un uzdevumus</strong> — straumes ir darba virzieni (piemēram, „Izstrāde", „Testēšana"), uzdevumi ir konkrēti darbi katrā straumē.
+          </li>
         </ol>
-        <div className="rounded-md border bg-muted/20 p-3 text-xs text-muted-foreground">
-          Ātrās saites: <Link href="/team" className="underline underline-offset-2">Komanda</Link> ·{" "}
-          <Link href="/projects" className="underline underline-offset-2">Projekti</Link> ·{" "}
-          <Link href="/dashboard" className="underline underline-offset-2">Dashboard</Link>
-        </div>
         <DialogFooter>
-          <Button onClick={closeAndPersist}>Sapratu</Button>
+          <Button onClick={closeAndPersist}>Sākt darbu</Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>
