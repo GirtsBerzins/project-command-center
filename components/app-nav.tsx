@@ -2,7 +2,7 @@
 
 import Link from "next/link"
 import { usePathname } from "next/navigation"
-import { LayoutDashboard, Layers, CheckSquare, Zap, BarChart2, FileText, LogOut, FolderKanban, Users } from "lucide-react"
+import { LayoutDashboard, Layers, CheckSquare, Zap, BarChart2, FileText, LogOut, FolderKanban, Users, Settings } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { createClient } from "@/lib/supabase/client"
 import { Button } from "@/components/ui/button"
@@ -24,7 +24,9 @@ const navItems = [
   { href: "/reports",   label: "Atskaites",        icon: FileText },
 ]
 
-export function AppNav() {
+type Role = "owner" | "manager" | "member" | "viewer"
+
+export function AppNav({ initialRole }: { initialRole?: Role }) {
   const pathname = usePathname()
   const supabase = createClient()
   const [selectedProject] = useState<StoredProject | null>(() => {
@@ -37,6 +39,7 @@ export function AppNav() {
     }
   })
   const [projects, setProjects] = useState<NavProject[]>([])
+  const [myRole, setMyRole] = useState<Role | null>(initialRole ?? null)
 
   useEffect(() => {
     let cancelled = false
@@ -117,6 +120,20 @@ export function AppNav() {
             {label}
           </Link>
         ))}
+        {(myRole === "owner" || myRole === "manager") && (
+          <Link
+            href="/settings"
+            className={cn(
+              "flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium transition-colors",
+              pathname.startsWith("/settings")
+                ? "bg-sidebar-accent text-sidebar-accent-foreground"
+                : "text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
+            )}
+          >
+            <Settings className="h-4 w-4" />
+            Iestatījumi
+          </Link>
+        )}
       </nav>
       <div className="p-2 border-t">
         <Button

@@ -21,7 +21,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
 
   return (
     <div className="flex min-h-screen">
-      <AppNav />
+      <AppNav initialRole={(me?.role as "owner" | "manager" | "member" | "viewer" | undefined) ?? undefined} />
       <main className="flex-1 p-6 bg-background overflow-auto">
         <FirstRunOnboarding showForOwner={me?.role === "owner"} />
         {children}
