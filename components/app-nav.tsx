@@ -2,7 +2,19 @@
 
 import Link from "next/link"
 import { usePathname } from "next/navigation"
-import { LayoutDashboard, Layers, CheckSquare, Zap, BarChart2, FileText, LogOut, FolderKanban, Users, Settings } from "lucide-react"
+import {
+  LayoutDashboard,
+  Layers,
+  CheckSquare,
+  Zap,
+  BarChart2,
+  FileText,
+  LogOut,
+  FolderKanban,
+  Users,
+  Settings,
+  Flag,
+} from "lucide-react"
 import { cn } from "@/lib/utils"
 import { createClient } from "@/lib/supabase/client"
 import { Button } from "@/components/ui/button"
@@ -19,6 +31,7 @@ const navItems = [
   { href: "/team",      label: "Komanda",         icon: Users },
   { href: "/streams",   label: "Straumes",        icon: Layers },
   { href: "/tasks",     label: "Uzdevumi",         icon: CheckSquare },
+  { href: "/milestones", label: "Atskaišu punkti", icon: Flag },
   { href: "/sprints",   label: "Sprinti",          icon: Zap },
   { href: "/kpis",      label: "KPI",              icon: BarChart2 },
   { href: "/reports",   label: "Atskaites",        icon: FileText },

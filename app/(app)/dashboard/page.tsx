@@ -3,7 +3,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Progress } from "@/components/ui/progress"
 import { ActivitySparkline } from "./activity-sparkline"
-import { AlertTriangle, CheckCircle2, Clock, TrendingUp } from "lucide-react"
+import { AlertTriangle, CheckCircle2, Clock, TrendingUp, Flag } from "lucide-react"
 
 interface Stream {
   id: string; name: string; status: string; progress: number; deadline: string | null
@@ -84,6 +84,10 @@ export default async function DashboardPage({ searchParams }: { searchParams?: P
       : supabase.from("activity_logs").select("created_at").gte("created_at", sevenDaysAgo.toISOString()).order("created_at"),
   ])
 
+  const { data: milestoneRows } = projectId
+    ? await supabase.from("milestones").select("status").eq("project_id", projectId)
+    : { data: [] as { status: string }[] }
+
   const activeSprint = ((activeSprints ?? []) as ActiveSprint[]).find((s) =>
     !projectId
       ? true
@@ -110,6 +114,10 @@ export default async function DashboardPage({ searchParams }: { searchParams?: P
   const sparklineData = buildSparklineData((activityLogs ?? []) as ActivityLog[])
   const totalActivity = sparklineData.reduce((s, d) => s + d.count, 0)
 
+  const ms = milestoneRows ?? []
+  const milestoneReached = ms.filter((m) => m.status === "reached").length
+  const milestoneTotal = ms.length
+
   return (
     <div className="space-y-6">
       <div>
@@ -119,7 +127,7 @@ export default async function DashboardPage({ searchParams }: { searchParams?: P
         </p>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+      <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
 
         {/* Riski */}
         <Card>
@@ -189,6 +197,24 @@ export default async function DashboardPage({ searchParams }: { searchParams?: P
             <ActivitySparkline data={sparklineData} />
           </CardContent>
         </Card>
+
+        {projectId && milestoneTotal > 0 && (
+          <Card>
+            <CardHeader className="pb-2">
+              <CardTitle className="text-sm font-medium flex items-center gap-2">
+                <Flag className="h-4 w-4 text-violet-500" />
+                Atskaišu punktu progress
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-2">
+              <p className="text-2xl font-bold">
+                {milestoneReached}/{milestoneTotal}
+              </p>
+              <Progress value={milestoneTotal > 0 ? Math.round((milestoneReached / milestoneTotal) * 100) : 0} className="h-2" />
+              <p className="text-xs text-muted-foreground">sasniegti mērķa punkti šajā projektā</p>
+            </CardContent>
+          </Card>
+        )}
       </div>
 
       {/* Straumes progress */}
