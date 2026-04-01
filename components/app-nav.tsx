@@ -14,10 +14,18 @@ import {
   Users,
   Settings,
   Flag,
+  ChevronDown,
 } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { createClient } from "@/lib/supabase/client"
 import { Button } from "@/components/ui/button"
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuRadioGroup,
+  DropdownMenuRadioItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu"
 import { useEffect, useState } from "react"
 import { PROJECT_STORAGE_KEY, type StoredProject, updateSelectedProject } from "@/lib/project-selection"
 interface NavProject {
@@ -80,41 +88,51 @@ export function AppNav({ initialRole }: { initialRole?: Role }) {
           <p className="text-[11px] font-medium text-sidebar-foreground/70 uppercase tracking-wide">
             Projekts
           </p>
-          <button
-            type="button"
-            onClick={() =>
-              updateSelectedProject(
-                selectedProject && selectedProject.id === null ? null : { id: null, name: "Visi projekti" },
-              )
-            }
-            className={cn(
-              "w-full flex items-center justify-between rounded-md border px-2.5 py-1.5 text-xs",
-              "bg-sidebar-background text-sidebar-foreground hover:bg-sidebar-accent transition-colors",
-            )}
-          >
-            <span className="truncate">
-              {selectedProject?.id
-                ? selectedProject.name
-                : selectedProject?.name ?? "Visi projekti"}
-            </span>
-          </button>
-          <div className="space-y-1">
-            {projects.slice(0, 6).map((p) => (
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
               <button
-                key={p.id}
                 type="button"
-                onClick={() => updateSelectedProject({ id: p.id, name: p.name })}
                 className={cn(
-                  "w-full text-left rounded-md px-2 py-1 text-xs",
-                  selectedProject?.id === p.id
-                    ? "bg-sidebar-accent text-sidebar-accent-foreground"
-                    : "text-sidebar-foreground/80 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground",
+                  "w-full flex items-center justify-between gap-1 rounded-md border px-2.5 py-1.5 text-xs",
+                  "bg-sidebar-background text-sidebar-foreground hover:bg-sidebar-accent transition-colors",
+                  "outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 ring-offset-sidebar-background",
                 )}
               >
-                {p.name}
+                <span className="truncate text-left">
+                  {selectedProject?.id
+                    ? selectedProject.name
+                    : (selectedProject?.name ?? "Visi projekti")}
+                </span>
+                <ChevronDown className="h-3.5 w-3.5 shrink-0 opacity-60" aria-hidden />
               </button>
-            ))}
-          </div>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent
+              align="start"
+              sideOffset={4}
+              className="w-[var(--radix-dropdown-menu-trigger-width)] min-w-[12rem] max-h-[min(70vh,18rem)] overflow-y-auto"
+            >
+              <DropdownMenuRadioGroup
+                value={selectedProject?.id ?? "__all__"}
+                onValueChange={(v) => {
+                  if (v === "__all__") {
+                    updateSelectedProject({ id: null, name: "Visi projekti" })
+                    return
+                  }
+                  const proj = projects.find((p) => p.id === v)
+                  if (proj) updateSelectedProject({ id: proj.id, name: proj.name })
+                }}
+              >
+                <DropdownMenuRadioItem value="__all__" className="text-xs">
+                  Visi projekti
+                </DropdownMenuRadioItem>
+                {projects.map((p) => (
+                  <DropdownMenuRadioItem key={p.id} value={p.id} className="text-xs">
+                    {p.name}
+                  </DropdownMenuRadioItem>
+                ))}
+              </DropdownMenuRadioGroup>
+            </DropdownMenuContent>
+          </DropdownMenu>
         </div>
       </div>
       <nav className="flex-1 p-2 space-y-1">
