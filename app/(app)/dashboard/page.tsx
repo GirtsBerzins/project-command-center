@@ -3,7 +3,8 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Progress } from "@/components/ui/progress"
 import { ActivitySparkline } from "./activity-sparkline"
-import { AlertTriangle, CheckCircle2, Clock, TrendingUp, Flag, Users } from "lucide-react"
+import { AlertTriangle, CheckCircle2, Clock, TrendingUp, Flag, Users, ArrowRight } from "lucide-react"
+import Link from "next/link"
 
 interface Stream {
   id: string; name: string; status: string; progress: number; deadline: string | null
@@ -191,6 +192,36 @@ export default async function DashboardPage({ searchParams }: { searchParams?: P
           Projekta pārskats — {new Date().toLocaleDateString("lv-LV", { dateStyle: "long" })}
         </p>
       </div>
+
+      {(streams ?? []).length === 0 && (
+        <div className="rounded-lg border border-dashed border-muted-foreground/30 bg-muted/20 p-8 text-center">
+          <h2 className="text-lg font-semibold mb-1">Laipni lūdzam Command Center!</h2>
+          <p className="text-sm text-muted-foreground mb-6 max-w-md mx-auto">
+            Vēl nav datu ko parādīt. Sāciet, izveidojot pirmo projektu un pievienojot tam straumes un uzdevumus.
+          </p>
+          <ol className="inline-flex flex-col gap-3 text-left text-sm max-w-xs mx-auto mb-6">
+            <li className="flex items-start gap-2">
+              <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-primary text-primary-foreground text-[11px] font-bold">1</span>
+              <span><Link href="/projects" className="font-medium underline underline-offset-2 hover:text-primary">Izveidojiet projektu</Link> sadaļā Projekti</span>
+            </li>
+            <li className="flex items-start gap-2">
+              <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-primary text-primary-foreground text-[11px] font-bold">2</span>
+              <span><Link href="/streams" className="font-medium underline underline-offset-2 hover:text-primary">Pievienojiet straumi</Link> (darba virzienus)</span>
+            </li>
+            <li className="flex items-start gap-2">
+              <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-primary text-primary-foreground text-[11px] font-bold">3</span>
+              <span><Link href="/tasks" className="font-medium underline underline-offset-2 hover:text-primary">Pievienojiet uzdevumus</Link> un sāciet darbu</span>
+            </li>
+          </ol>
+          <Link
+            href="/projects"
+            className="inline-flex items-center gap-2 rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90 transition-colors"
+          >
+            Sākt — izveidot projektu
+            <ArrowRight className="h-4 w-4" />
+          </Link>
+        </div>
+      )}
 
       <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
 
