@@ -8,7 +8,6 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Pencil, Trash2, Users } from "lucide-react"
-import { createClient } from "@/lib/supabase/client"
 
 type Role = "owner" | "manager" | "member" | "viewer"
 type MemberStatus = "active" | "pending"
@@ -47,7 +46,6 @@ function displayName(member: TeamMember) {
 }
 
 export default function TeamPage() {
-  const supabase = createClient()
   const [members, setMembers] = useState<TeamMember[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -57,6 +55,8 @@ export default function TeamPage() {
   const [inviteEmail, setInviteEmail] = useState("")
   const [inviteRole, setInviteRole] = useState<Role>("member")
   const [inviting, setInviting] = useState(false)
+  const [sendingTestEmail, setSendingTestEmail] = useState(false)
+  const [testEmail, setTestEmail] = useState("")
   const [success, setSuccess] = useState<string | null>(null)
 
   const [roleTarget, setRoleTarget] = useState<TeamMember | null>(null)
@@ -67,6 +67,7 @@ export default function TeamPage() {
   const [removing, setRemoving] = useState(false)
 
   const [myRole, setMyRole] = useState<Role | null>(null)
+  const [myUserId, setMyUserId] = useState<string | null>(null)
 
   async function readJsonSafe(res: Response) {
     const raw = await res.text()
@@ -81,17 +82,15 @@ export default function TeamPage() {
   async function loadData() {
     setLoading(true)
     setError(null)
-    const [{ data: me }, membersRes] = await Promise.all([
-      supabase.from("profiles").select("role").eq("id", (await supabase.auth.getUser()).data.user?.id ?? "").maybeSingle(),
-      fetch("/api/team"),
-    ])
-    setMyRole((me?.role as Role | null) ?? null)
+    const membersRes = await fetch("/api/team", { cache: "no-store" })
     const payload = await readJsonSafe(membersRes)
     if (!membersRes.ok) {
       setError((payload.error as string | undefined) ?? "Neizdevās ielādēt komandu")
       setLoading(false)
       return
     }
+    setMyRole((payload.myRole as Role | null) ?? null)
+    setMyUserId((payload.myUserId as string | null) ?? null)
     setMembers((payload.members as TeamMember[] | undefined) ?? [])
     setLoading(false)
   }
@@ -150,6 +149,28 @@ export default function TeamPage() {
     await loadData()
   }
 
+  async function handleSendTestEmail() {
+    if (!testEmail.trim()) return
+    setError(null)
+    setSuccess(null)
+    setSendingTestEmail(true)
+    const res = await fetch("/api/team", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        action: "test_email",
+        email: testEmail,
+      }),
+    })
+    const payload = await readJsonSafe(res)
+    setSendingTestEmail(false)
+    if (!res.ok) {
+      setError((payload.error as string | undefined) ?? "Neizdevās nosūtīt testa e-pastu")
+      return
+    }
+    setSuccess(`Testa e-pasts nosūtīts uz ${(payload.email as string | undefined) ?? testEmail}`)
+  }
+
   async function handleResend(email: string) {
     setError(null)
     setSuccess(null)
@@ -168,6 +189,12 @@ export default function TeamPage() {
 
   async function handleUpdateRole() {
     if (!roleTarget) return
+    setError(null)
+    setSuccess(null)
+    if (myRole === "manager" && (roleTarget.role === "owner" || roleTarget.role === "manager")) {
+      setError("Pārvaldnieks var mainīt tikai dalībnieku vai skatītāju lomas")
+      return
+    }
     setSavingRole(true)
     const res = await fetch("/api/team", {
       method: "PATCH",
@@ -186,12 +213,15 @@ export default function TeamPage() {
       setRoleTarget(null)
       return
     }
-    setMembers((prev) => prev.map((m) => (m.id === roleTarget.id ? { ...m, role: nextRole } : m)))
+    setSuccess("Loma atjaunināta")
+    await loadData()
     setRoleTarget(null)
   }
 
   async function handleRemove() {
     if (!removeTarget) return
+    setError(null)
+    setSuccess(null)
     setRemoving(true)
     const res = await fetch("/api/team", {
       method: "DELETE",
@@ -204,7 +234,8 @@ export default function TeamPage() {
       setError((payload.error as string | undefined) ?? "Neizdevās noņemt lietotāju")
       return
     }
-    setMembers((prev) => prev.filter((m) => m.id !== removeTarget.id))
+    setSuccess("Lietotājs noņemts no komandas")
+    await loadData()
     setRemoveTarget(null)
   }
 
@@ -223,6 +254,26 @@ export default function TeamPage() {
 
       {error && <p className="text-sm text-destructive">{error}</p>}
       {success && <p className="text-sm text-green-600">{success}</p>}
+
+      {canInvite && (
+        <div className="rounded-md border p-3">
+          <p className="text-sm font-medium">Testa e-pasts</p>
+          <p className="text-xs text-muted-foreground mb-2">
+            Pieejams īpašniekam un pārvaldniekam. Sūta paroles atjaunošanas e-pastu komandas lietotājam.
+          </p>
+          <div className="flex gap-2">
+            <Input
+              type="email"
+              value={testEmail}
+              onChange={(e) => setTestEmail(e.target.value)}
+              placeholder="komanda@uznemums.lv"
+            />
+            <Button onClick={handleSendTestEmail} disabled={sendingTestEmail || !testEmail.trim()}>
+              {sendingTestEmail ? "Sūta..." : "Sūtīt testu"}
+            </Button>
+          </div>
+        </div>
+      )}
 
       <div className="rounded-md border">
         <Table>
@@ -255,6 +306,9 @@ export default function TeamPage() {
                       </span>
                     )}
                     <span className="font-medium">{displayName(m)}</span>
+                    {m.id === myUserId && (
+                      <span className="text-xs text-muted-foreground">(Tu)</span>
+                    )}
                   </div>
                 </TableCell>
                 <TableCell className="text-sm">{m.email ?? "—"}</TableCell>

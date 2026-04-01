@@ -1,7 +1,7 @@
 "use client"
 
 import { useState } from "react"
-import { useRouter } from "next/navigation"
+import { useRouter, useSearchParams } from "next/navigation"
 import { createClient } from "@/lib/supabase/client"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -10,6 +10,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 
 export default function LoginPage() {
   const router = useRouter()
+  const searchParams = useSearchParams()
   const supabase = createClient()
   const [email, setEmail] = useState("")
   const [password, setPassword] = useState("")
@@ -17,17 +18,20 @@ export default function LoginPage() {
   const [loading, setLoading] = useState(false)
   const [mode, setMode] = useState<"login" | "signup">("login")
   const [oauthLoading, setOauthLoading] = useState<"github" | "google" | null>(null)
+  const [resetLoading, setResetLoading] = useState(false)
+  const callbackError = searchParams.get("error")
 
   async function handleLogin(e: React.FormEvent) {
     e.preventDefault()
     setLoading(true)
     setError(null)
 
-    const { error } =
+    const normalizedEmail = email.trim().toLowerCase()
+    const { data, error } =
       mode === "login"
-        ? await supabase.auth.signInWithPassword({ email, password })
+        ? await supabase.auth.signInWithPassword({ email: normalizedEmail, password })
         : await supabase.auth.signUp({
-            email,
+            email: normalizedEmail,
             password,
             options: {
               emailRedirectTo: `${window.location.origin}/auth/callback?next=/dashboard`,
@@ -40,7 +44,12 @@ export default function LoginPage() {
     } else {
       setLoading(false)
       if (mode === "signup") {
-        setError("Reģistrācija pabeigta. Pārbaudiet e-pastu, lai apstiprinātu kontu.")
+        if (data?.session) {
+          router.push("/dashboard")
+          router.refresh()
+        } else {
+          setError("Reģistrācija pabeigta. Pārbaudiet e-pastu, lai apstiprinātu kontu.")
+        }
       } else {
         router.push("/dashboard")
         router.refresh()
@@ -61,6 +70,24 @@ export default function LoginPage() {
       setError(error.message)
       setOauthLoading(null)
     }
+  }
+
+  async function handleResetPassword() {
+    if (!email.trim()) {
+      setError("Ievadiet e-pastu, lai nosūtītu paroles atjaunošanu.")
+      return
+    }
+    setError(null)
+    setResetLoading(true)
+    const { error } = await supabase.auth.resetPasswordForEmail(email.trim().toLowerCase(), {
+      redirectTo: `${window.location.origin}/login`,
+    })
+    setResetLoading(false)
+    if (error) {
+      setError(error.message)
+      return
+    }
+    setError("Paroles atjaunošanas e-pasts nosūtīts.")
   }
 
   return (
@@ -143,6 +170,22 @@ export default function LoginPage() {
                 required
               />
             </div>
+            {mode === "login" && (
+              <Button
+                type="button"
+                variant="link"
+                className="px-0"
+                onClick={handleResetPassword}
+                disabled={resetLoading}
+              >
+                {resetLoading ? "Sūta..." : "Aizmirsu paroli"}
+              </Button>
+            )}
+            {callbackError && (
+              <p className="text-sm text-destructive">
+                Autorizācija neizdevās. Lūdzu mēģiniet vēlreiz.
+              </p>
+            )}
             {error && (
               <p className="text-sm text-destructive">{error}</p>
             )}

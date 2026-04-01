@@ -9,7 +9,7 @@ type InviteBody = {
   email?: string
   full_name?: string
   role?: Role
-  action?: "invite" | "resend"
+  action?: "invite" | "resend" | "test_email"
 }
 
 async function getCurrentUserAndRole() {
@@ -29,7 +29,7 @@ async function getCurrentUserAndRole() {
 
 export async function GET() {
   try {
-    const { supabase, user } = await getCurrentUserAndRole()
+    const { supabase, user, role } = await getCurrentUserAndRole()
     if (!user) {
       return NextResponse.json({ error: "Nav autorizācijas" }, { status: 401 })
     }
@@ -68,7 +68,7 @@ export async function GET() {
       status: usersById.get(p.id) ?? "pending",
     }))
 
-    return NextResponse.json({ members })
+    return NextResponse.json({ members, myRole: role, myUserId: user.id })
   } catch (e) {
     return NextResponse.json({ error: (e as Error).message || "Neizdevās ielādēt komandu" }, { status: 500 })
   }
@@ -85,6 +85,28 @@ export async function POST(request: Request) {
   const email = body.email?.trim().toLowerCase()
   if (!email) {
     return NextResponse.json({ error: "E-pasta adrese ir obligāta" }, { status: 400 })
+  }
+
+  if (action === "test_email") {
+    const origin = new URL(request.url).origin
+    const { data: targetProfile } = await supabase
+      .from("profiles")
+      .select("id")
+      .eq("email", email)
+      .maybeSingle()
+
+    if (!targetProfile) {
+      return NextResponse.json({ error: "Tests iespējams tikai komandas lietotājiem" }, { status: 404 })
+    }
+
+    const { error: resetError } = await supabase.auth.resetPasswordForEmail(email, {
+      redirectTo: `${origin}/login`,
+    })
+    if (resetError) {
+      return NextResponse.json({ error: resetError.message }, { status: 400 })
+    }
+
+    return NextResponse.json({ ok: true, email })
   }
 
   if (action === "invite") {
