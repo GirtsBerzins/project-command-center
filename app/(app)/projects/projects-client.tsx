@@ -130,6 +130,7 @@ export function ProjectsClient({ initialProjects, profiles }: Props) {
   const [saving, setSaving] = useState(false)
   const [deleting, setDeleting] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [success, setSuccess] = useState<string | null>(null)
   const [activeProjectId, setActiveProjectId] = useState<string | null>(null)
 
   useEffect(() => {
@@ -141,6 +142,12 @@ export function ProjectsClient({ initialProjects, profiles }: Props) {
       // ignore
     }
   }, [])
+
+  useEffect(() => {
+    if (!success) return
+    const t = setTimeout(() => setSuccess(null), 4000)
+    return () => clearTimeout(t)
+  }, [success])
 
   const enrichedProjects = useMemo(
     () =>
@@ -227,6 +234,7 @@ export function ProjectsClient({ initialProjects, profiles }: Props) {
 
     setSaving(false)
     setDialogOpen(false)
+    setSuccess(editingProject ? "Projekts veiksmīgi atjaunināts." : "Projekts veiksmīgi izveidots.")
   }
 
   async function handleDelete() {
@@ -236,6 +244,7 @@ export function ProjectsClient({ initialProjects, profiles }: Props) {
     setProjects((prev) => prev.filter((p) => p.id !== deleteTarget.id))
     setDeleting(false)
     setDeleteTarget(null)
+    setSuccess(`Projekts "${deleteTarget.name}" dzēsts.`)
   }
 
   return (
@@ -250,6 +259,12 @@ export function ProjectsClient({ initialProjects, profiles }: Props) {
           Jauns projekts
         </Button>
       </div>
+
+      {success && (
+        <p className="text-sm text-green-700 bg-green-50 border border-green-200 rounded-md px-3 py-2">
+          {success}
+        </p>
+      )}
 
       <div className="rounded-md border">
         <Table>

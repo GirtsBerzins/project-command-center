@@ -193,6 +193,7 @@ export function TasksClient({
   const [saving, setSaving] = useState(false)
   const [deleting, setDeleting] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [success, setSuccess] = useState<string | null>(null)
 
   const [filterStream, setFilterStream] = useState("all")
   const [filterAssignee, setFilterAssignee] = useState("all")
@@ -220,6 +221,12 @@ export function TasksClient({
   useEffect(() => {
     setMilestones(initialMilestones)
   }, [initialMilestones])
+
+  useEffect(() => {
+    if (!success) return
+    const t = setTimeout(() => setSuccess(null), 4000)
+    return () => clearTimeout(t)
+  }, [success])
 
   const recalculate = useCallback(async () => {
     if (!selectedProjectId) return
@@ -405,6 +412,7 @@ export function TasksClient({
         if (row?.id) await persistDependencies(row.id, depDrafts)
       }
       setDialogOpen(false)
+      setSuccess(editingTask ? "Uzdevums veiksmīgi atjaunināts." : "Uzdevums veiksmīgi izveidots.")
       await recalculate()
       router.refresh()
     } catch (e) {
@@ -416,12 +424,14 @@ export function TasksClient({
 
   async function handleDelete() {
     if (!deleteTarget) return
+    const deletedTitle = deleteTarget.title
     setDeleting(true)
     await supabase.from("task_dependencies").delete().eq("task_id", deleteTarget.id)
     await supabase.from("task_dependencies").delete().eq("depends_on_task_id", deleteTarget.id)
     await supabase.from("tasks").delete().eq("id", deleteTarget.id)
     setDeleting(false)
     setDeleteTarget(null)
+    setSuccess(`Uzdevums "${deletedTitle}" dzēsts.`)
     await recalculate()
   }
 
@@ -455,34 +465,36 @@ export function TasksClient({
             </p>
           )}
         </div>
-        <div className="flex gap-2">
-          {selectedProjectId && (
-            <Button variant="outline" onClick={() => setImportOpen(true)}>
-              <Upload className="h-4 w-4" />
-              Importēt
-            </Button>
-          )}
-          <Button onClick={() => openCreate()}>
+        <div className="flex gap-2 flex-wrap">
+          <Button variant="outline" className="gap-2" onClick={() => setImportOpen(true)}>
+            <Upload className="h-4 w-4" />
+            Importēt
+          </Button>
+          <Button className="gap-2" onClick={() => openCreate()}>
             <Plus className="h-4 w-4" />
             Jauns uzdevums
           </Button>
         </div>
       </div>
 
-      {selectedProjectId && (
-        <TasksImportDialog
-          open={importOpen}
-          onOpenChange={setImportOpen}
-          projectId={selectedProjectId}
-          streams={streams}
-          profiles={profiles}
-          existingTasks={tasks.map((t) => ({ id: t.id, title: t.title }))}
-          onImported={() => {
-            router.refresh()
-            void recalculate()
-          }}
-        />
+      {success && (
+        <p className="text-sm text-green-700 bg-green-50 border border-green-200 rounded-md px-3 py-2">
+          {success}
+        </p>
       )}
+
+      <TasksImportDialog
+        open={importOpen}
+        onOpenChange={setImportOpen}
+        projectId={selectedProjectId ?? null}
+        streams={streams}
+        profiles={profiles}
+        existingTasks={tasks.map((t) => ({ id: t.id, title: t.title }))}
+        onImported={() => {
+          router.refresh()
+          void recalculate()
+        }}
+      />
 
       <div className="flex gap-2 flex-wrap">
         <Select value={filterStream} onValueChange={setFilterStream}>
