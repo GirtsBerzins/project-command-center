@@ -3,7 +3,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Progress } from "@/components/ui/progress"
 import { ActivitySparkline } from "./activity-sparkline"
-import { AlertTriangle, CheckCircle2, Clock, TrendingUp, Flag } from "lucide-react"
+import { AlertTriangle, CheckCircle2, Clock, TrendingUp, Flag, Users } from "lucide-react"
 
 interface Stream {
   id: string; name: string; status: string; progress: number; deadline: string | null
@@ -23,6 +23,14 @@ interface ActiveSprint {
   task_sprint: TaskSprint[]
 }
 interface ActivityLog { created_at: string }
+
+interface DashTaskRow {
+  id: string
+  assignee_id: string | null
+  status: string
+  calculated_end_date: string | null
+  title: string
+}
 
 const STATUS_LV: Record<string, string> = {
   active: "Aktīvs", on_hold: "Aizturēts", completed: "Pabeigts", cancelled: "Atcelts",
@@ -84,9 +92,66 @@ export default async function DashboardPage({ searchParams }: { searchParams?: P
       : supabase.from("activity_logs").select("created_at").gte("created_at", sevenDaysAgo.toISOString()).order("created_at"),
   ])
 
-  const { data: milestoneRows } = projectId
-    ? await supabase.from("milestones").select("status").eq("project_id", projectId)
-    : { data: [] as { status: string }[] }
+  const streamIds = projectId ? (streams ?? []).map((s) => s.id) : []
+
+  const [{ data: milestoneRows }, { data: projTasks }, { data: projDeps }] = await Promise.all([
+    projectId
+      ? supabase.from("milestones").select("status").eq("project_id", projectId)
+      : Promise.resolve({ data: [] as { status: string }[] }),
+    streamIds.length > 0
+      ? supabase
+          .from("tasks")
+          .select("id, assignee_id, status, calculated_end_date, title")
+          .in("stream_id", streamIds)
+      : Promise.resolve({ data: [] as DashTaskRow[] }),
+    streamIds.length > 0
+      ? supabase.from("task_dependencies").select("task_id, depends_on_task_id, type")
+      : Promise.resolve({ data: [] as { task_id: string; depends_on_task_id: string; type: string }[] }),
+  ])
+
+  const taskList = (projTasks ?? []) as DashTaskRow[]
+  const depList = projDeps ?? []
+  const taskById = new Map(taskList.map((t) => [t.id, t]))
+
+  function isSeqBlocked(taskId: string): boolean {
+    const preds = depList.filter((d) => d.task_id === taskId && d.type === "sequential")
+    for (const p of preds) {
+      const pred = taskById.get(p.depends_on_task_id)
+      if (pred && pred.status !== "done") return true
+    }
+    return false
+  }
+
+  const memberIds = new Set<string>()
+  for (const t of taskList) {
+    if (t.assignee_id) memberIds.add(t.assignee_id)
+  }
+
+  const { data: memberProfiles } =
+    memberIds.size > 0
+      ? await supabase.from("profiles").select("id, full_name").in("id", [...memberIds])
+      : { data: [] as { id: string; full_name: string | null }[] }
+
+  const availability = [...memberIds].map((mid) => {
+    const mine = taskList.filter((t) => t.assignee_id === mid)
+    const active = mine.filter((t) => t.status !== "done")
+    const inProgress = mine.filter((t) => t.status === "in_progress").length
+    const blocked = active.some((t) => isSeqBlocked(t.id))
+    let freeBy: string | null = null
+    for (const t of active) {
+      const end = t.calculated_end_date
+      if (!end) continue
+      if (!freeBy || end > freeBy) freeBy = end
+    }
+    const prof = (memberProfiles ?? []).find((p) => p.id === mid)
+    return {
+      id: mid,
+      name: prof?.full_name ?? mid.slice(0, 8),
+      inProgress,
+      blocked,
+      freeBy,
+    }
+  })
 
   const activeSprint = ((activeSprints ?? []) as ActiveSprint[]).find((s) =>
     !projectId
@@ -216,6 +281,37 @@ export default async function DashboardPage({ searchParams }: { searchParams?: P
           </Card>
         )}
       </div>
+
+      {projectId && availability.length > 0 && (
+        <div>
+          <h2 className="text-lg font-semibold mb-3 flex items-center gap-2">
+            <Users className="h-4 w-4" />
+            Komandas noslodze
+          </h2>
+          <Card>
+            <CardContent className="pt-4 space-y-3">
+              {availability.map((m) => (
+                <div
+                  key={m.id}
+                  className="flex flex-wrap items-center justify-between gap-2 text-sm border-b last:border-0 pb-2 last:pb-0"
+                >
+                  <span className="font-medium">{m.name}</span>
+                  <div className="flex flex-wrap gap-2 text-xs text-muted-foreground items-center">
+                    <span>Procesā: {m.inProgress}</span>
+                    {m.blocked && <Badge variant="warning">Bloķēts</Badge>}
+                    {m.freeBy && (
+                      <span>
+                        Brīvs ap ~{new Date(m.freeBy).toLocaleDateString("lv-LV", { dateStyle: "medium" })}
+                      </span>
+                    )}
+                    {!m.freeBy && m.inProgress === 0 && <span>Brīvs</span>}
+                  </div>
+                </div>
+              ))}
+            </CardContent>
+          </Card>
+        </div>
+      )}
 
       {/* Straumes progress */}
       <div>
