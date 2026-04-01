@@ -31,6 +31,7 @@ import {
 import { Plus, Pencil, Trash2, User, Calendar, GripVertical, AlertTriangle, Link2, Upload } from "lucide-react"
 import { TasksImportDialog } from "./tasks-import-dialog"
 import { TasksGantt } from "./tasks-gantt"
+import { TasksTableBulk } from "./tasks-table-bulk"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 
 interface Profile {
@@ -51,7 +52,7 @@ export interface TaskDependencyRow {
   type: "sequential" | "parallel"
 }
 
-interface Task {
+export interface Task {
   id: string
   title: string
   description: string | null
@@ -550,6 +551,19 @@ export function TasksClient({
             Ganta
           </TabsTrigger>
         </TabsList>
+
+        <TabsContent value="table" className="mt-0">
+          <TasksTableBulk
+            tasks={tasks}
+            streams={streams}
+            profiles={profiles}
+            myRole={myRole}
+            onChanged={() => {
+              router.refresh()
+              void recalculate()
+            }}
+          />
+        </TabsContent>
 
         <TabsContent value="gantt" className="mt-0">
           {selectedProjectId && (
