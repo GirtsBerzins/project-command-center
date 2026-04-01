@@ -1,6 +1,6 @@
 "use client"
 
-import { useMemo, useState } from "react"
+import { useMemo, useState, useEffect } from "react"
 import type { Project } from "@/lib/supabase/types"
 import { createClient } from "@/lib/supabase/client"
 import { Button } from "@/components/ui/button"
@@ -24,8 +24,8 @@ import {
   TableRow,
 } from "@/components/ui/table"
 import { Progress } from "@/components/ui/progress"
-import { Pencil, Plus, Trash2 } from "lucide-react"
-import { updateSelectedProject } from "@/lib/project-selection"
+import { CheckCircle2, Pencil, Plus, Trash2 } from "lucide-react"
+import { PROJECT_STORAGE_KEY, updateSelectedProject } from "@/lib/project-selection"
 
 interface Profile {
   id: string
@@ -130,6 +130,17 @@ export function ProjectsClient({ initialProjects, profiles }: Props) {
   const [saving, setSaving] = useState(false)
   const [deleting, setDeleting] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [activeProjectId, setActiveProjectId] = useState<string | null>(null)
+
+  useEffect(() => {
+    try {
+      const raw = window.localStorage.getItem(PROJECT_STORAGE_KEY)
+      const stored = raw ? (JSON.parse(raw) as { id: string | null }) : null
+      setActiveProjectId(stored?.id ?? null)
+    } catch {
+      // ignore
+    }
+  }, [])
 
   const enrichedProjects = useMemo(
     () =>
@@ -264,15 +275,42 @@ export function ProjectsClient({ initialProjects, profiles }: Props) {
               <TableRow key={project.id}>
                 <TableCell>
                   <div>
-                    <button
-                      type="button"
-                      className="font-medium text-left hover:underline"
-                      onClick={() => updateSelectedProject({ id: project.id, name: project.name })}
-                    >
-                      {project.name}
-                    </button>
+                    <div className="flex items-center gap-1.5">
+                      <button
+                        type="button"
+                        className="font-medium text-left hover:underline focus-visible:outline-none focus-visible:underline"
+                        title="Klikšķiniet, lai iestatītu šo projektu kā aktīvo — tas filtrēs uzdevumus, Gantta diagrammu un pārskatus"
+                        onClick={() => {
+                          updateSelectedProject({ id: project.id, name: project.name })
+                          setActiveProjectId(project.id)
+                        }}
+                      >
+                        {project.name}
+                      </button>
+                      {activeProjectId === project.id && (
+                        <span
+                          className="inline-flex items-center gap-0.5 text-[11px] font-medium text-green-700 bg-green-50 border border-green-200 rounded-full px-1.5 py-0.5"
+                          title="Šis projekts ir pašlaik aktīvais"
+                        >
+                          <CheckCircle2 className="h-3 w-3" />
+                          Aktīvs
+                        </span>
+                      )}
+                    </div>
                     {project.description && (
                       <p className="text-xs text-muted-foreground line-clamp-1">{project.description}</p>
+                    )}
+                    {activeProjectId !== project.id && (
+                      <button
+                        type="button"
+                        className="text-[11px] text-muted-foreground hover:text-primary underline-offset-2 hover:underline mt-0.5"
+                        onClick={() => {
+                          updateSelectedProject({ id: project.id, name: project.name })
+                          setActiveProjectId(project.id)
+                        }}
+                      >
+                        Iestatīt kā aktīvo
+                      </button>
                     )}
                   </div>
                 </TableCell>
