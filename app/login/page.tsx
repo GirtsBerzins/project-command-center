@@ -14,6 +14,7 @@ export default function LoginPage() {
   const [email, setEmail] = useState("")
   const [password, setPassword] = useState("")
   const [error, setError] = useState<string | null>(null)
+  const [successMessage, setSuccessMessage] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
   const [mode, setMode] = useState<"login" | "signup">("login")
   const [oauthLoading, setOauthLoading] = useState<"github" | "google" | null>(null)
@@ -48,7 +49,7 @@ export default function LoginPage() {
           router.push("/dashboard")
           router.refresh()
         } else {
-          setError("Reģistrācija pabeigta. Pārbaudiet e-pastu, lai apstiprinātu kontu.")
+          setSuccessMessage("Reģistrācija pabeigta! Pārbaudiet e-pastu, lai apstiprinātu kontu.")
         }
       } else {
         router.push("/dashboard")
@@ -87,7 +88,7 @@ export default function LoginPage() {
       setError(error.message)
       return
     }
-    setError("Paroles atjaunošanas e-pasts nosūtīts.")
+    setSuccessMessage("Paroles atjaunošanas e-pasts nosūtīts. Pārbaudiet savu pastkasti.")
   }
 
   return (
@@ -104,14 +105,14 @@ export default function LoginPage() {
             <Button
               type="button"
               variant={mode === "login" ? "default" : "outline"}
-              onClick={() => setMode("login")}
+              onClick={() => { setMode("login"); setError(null); setSuccessMessage(null) }}
             >
               Ielogoties
             </Button>
             <Button
               type="button"
               variant={mode === "signup" ? "default" : "outline"}
-              onClick={() => setMode("signup")}
+              onClick={() => { setMode("signup"); setError(null); setSuccessMessage(null) }}
             >
               Reģistrēties
             </Button>
@@ -185,6 +186,9 @@ export default function LoginPage() {
               <p className="text-sm text-destructive">
                 Autorizācija neizdevās. Lūdzu mēģiniet vēlreiz.
               </p>
+            )}
+            {successMessage && (
+              <p className="text-sm text-green-600 rounded-md bg-green-50 border border-green-200 px-3 py-2">{successMessage}</p>
             )}
             {error && (
               <p className="text-sm text-destructive">{error}</p>
