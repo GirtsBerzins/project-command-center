@@ -113,11 +113,12 @@ interface Props {
   savedReports: SavedReport[]
   weekStart: string
   weekEnd: string
+  selectedProjectName: string | null
 }
 
 export function ReportsClient({
   completedTasks, delayedTasks, openRisks,
-  activeSprint, savedReports, weekStart, weekEnd,
+  activeSprint, savedReports, weekStart, weekEnd, selectedProjectName,
 }: Props) {
   const supabase = createClient()
 
@@ -180,6 +181,9 @@ export function ReportsClient({
           <p className="text-sm text-muted-foreground">
             Nedēļa no {fmt(weekStart)} — {fmt(weekEnd)}
           </p>
+          {selectedProjectName && (
+            <p className="text-xs text-muted-foreground">Filtrs: {selectedProjectName}</p>
+          )}
         </div>
         <div className="flex gap-2">
           <Button variant="outline" onClick={handleExport}>

@@ -107,9 +107,17 @@ interface Props {
   initialStreams: Stream[]
   profiles: Profile[]
   projects: Project[]
+  selectedProjectId: string | null
+  selectedProjectName: string | null
 }
 
-export function StreamsClient({ initialStreams, profiles, projects }: Props) {
+export function StreamsClient({
+  initialStreams,
+  profiles,
+  projects,
+  selectedProjectId,
+  selectedProjectName,
+}: Props) {
   const supabase = createClient()
   const [streams, setStreams] = useState<Stream[]>(initialStreams)
   const [dialogOpen, setDialogOpen] = useState(false)
@@ -130,23 +138,34 @@ export function StreamsClient({ initialStreams, profiles, projects }: Props) {
         (payload) => {
           if (payload.eventType === "INSERT") {
             const newStream = payload.new as Stream
+            if (selectedProjectId && newStream.project_id !== selectedProjectId) {
+              return
+            }
             newStream.profiles =
               profiles.find((p) => p.id === newStream.owner_id) ?? null
             newStream.projects =
               projects.find((p) => p.id === newStream.project_id) ?? null
             setStreams((prev) => [newStream, ...prev])
           } else if (payload.eventType === "UPDATE") {
-            setStreams((prev) =>
-              prev.map((s) => {
-                if (s.id !== payload.new.id) return s
-                const updated = { ...s, ...(payload.new as Stream) }
-                updated.profiles =
-                  profiles.find((p) => p.id === updated.owner_id) ?? null
-                updated.projects =
-                  projects.find((p) => p.id === updated.project_id) ?? null
-                return updated
-              })
-            )
+            const updatedStream = payload.new as Stream
+            const inSelectedProject = !selectedProjectId || updatedStream.project_id === selectedProjectId
+            setStreams((prev) => {
+              if (!inSelectedProject) {
+                return prev.filter((s) => s.id !== updatedStream.id)
+              }
+
+              const withRelations: Stream = {
+                ...updatedStream,
+                profiles: profiles.find((p) => p.id === updatedStream.owner_id) ?? null,
+                projects: projects.find((p) => p.id === updatedStream.project_id) ?? null,
+              }
+
+              const existingIndex = prev.findIndex((s) => s.id === updatedStream.id)
+              if (existingIndex === -1) {
+                return [withRelations, ...prev]
+              }
+              return prev.map((s) => (s.id === updatedStream.id ? withRelations : s))
+            })
           } else if (payload.eventType === "DELETE") {
             setStreams((prev) =>
               prev.filter((s) => s.id !== (payload.old as { id: string }).id)
@@ -157,12 +176,12 @@ export function StreamsClient({ initialStreams, profiles, projects }: Props) {
       .subscribe()
 
     return () => { supabase.removeChannel(channel) }
-  }, [supabase, profiles])
+  }, [supabase, profiles, projects, selectedProjectId])
 
   // ── Dialog helpers ────────────────────────────────────────────────────────
   function openCreate() {
     setEditingStream(null)
-    setForm(EMPTY_FORM)
+    setForm({ ...EMPTY_FORM, project_id: selectedProjectId ?? "" })
     setError(null)
     setDialogOpen(true)
   }
@@ -227,6 +246,9 @@ export function StreamsClient({ initialStreams, profiles, projects }: Props) {
         <div>
           <h1 className="text-2xl font-bold">Straumes</h1>
           <p className="text-sm text-muted-foreground">{streams.length} straumes kopā</p>
+          {selectedProjectName && (
+            <p className="text-xs text-muted-foreground">Filtrs: {selectedProjectName}</p>
+          )}
         </div>
         <Button onClick={openCreate}>
           <Plus className="h-4 w-4" />

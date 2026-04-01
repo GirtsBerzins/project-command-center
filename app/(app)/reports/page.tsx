@@ -1,8 +1,12 @@
 import { createClient } from "@/lib/supabase/server"
 import { ReportsClient } from "./reports-client"
 
-export default async function ReportsPage() {
+type SearchParams = { project_id?: string }
+
+export default async function ReportsPage({ searchParams }: { searchParams?: Promise<SearchParams> | SearchParams }) {
   const supabase = await createClient()
+  const resolvedSearch = await Promise.resolve(searchParams)
+  const projectId = typeof resolvedSearch?.project_id === "string" ? resolvedSearch.project_id : null
 
   const weekStart = new Date()
   weekStart.setDate(weekStart.getDate() - weekStart.getDay()) // Sunday
@@ -12,28 +16,34 @@ export default async function ReportsPage() {
   weekEnd.setDate(weekStart.getDate() + 6)
   weekEnd.setHours(23, 59, 59, 999)
 
+  const completedTasksQuery = supabase
+    .from("tasks")
+    .select("id, title, assignee_id, stream_id, profiles(full_name), streams!inner(name, project_id)")
+    .eq("status", "done")
+    .gte("due_date", weekStart.toISOString().slice(0, 10))
+  const delayedTasksQuery = supabase
+    .from("tasks")
+    .select("id, title, due_date, priority, assignee_id, profiles(full_name), streams!inner(name, project_id), stream_id")
+    .neq("status", "done")
+    .lt("due_date", new Date().toISOString().slice(0, 10))
+    .not("due_date", "is", null)
+    .order("due_date")
+  if (projectId) {
+    completedTasksQuery.eq("streams.project_id", projectId)
+    delayedTasksQuery.eq("streams.project_id", projectId)
+  }
+
   const [
     { data: completedTasks },
     { data: delayedTasks },
     { data: openRisks },
-    { data: activeSprint },
+    { data: activeSprints },
     { data: savedReports },
+    { data: selectedProject },
   ] = await Promise.all([
-    // Tasks completed this week
-    supabase
-      .from("tasks")
-      .select("id, title, assignee_id, stream_id, profiles(full_name), streams(name)")
-      .eq("status", "done")
-      .gte("due_date", weekStart.toISOString().slice(0, 10)),
+    completedTasksQuery,
 
-    // Overdue tasks (not done, due before today)
-    supabase
-      .from("tasks")
-      .select("id, title, due_date, priority, assignee_id, profiles(full_name), streams(name), stream_id")
-      .neq("status", "done")
-      .lt("due_date", new Date().toISOString().slice(0, 10))
-      .not("due_date", "is", null)
-      .order("due_date"),
+    delayedTasksQuery,
 
     // Open high risks
     supabase
@@ -45,10 +55,9 @@ export default async function ReportsPage() {
     // Active sprint
     supabase
       .from("sprints")
-      .select(`id, name, end_date, task_sprint(tasks(status))`)
+      .select(`id, name, end_date, task_sprint(tasks(status, streams(project_id)))`)
       .eq("status", "active")
-      .limit(1)
-      .maybeSingle(),
+      .order("end_date", { ascending: true }),
 
     // Previously saved reports
     supabase
@@ -56,7 +65,17 @@ export default async function ReportsPage() {
       .select("id, week_start, week_end, content_md, created_at")
       .order("week_start", { ascending: false })
       .limit(10),
+    projectId
+      ? supabase.from("projects").select("id, name").eq("id", projectId).maybeSingle()
+      : Promise.resolve({ data: null }),
   ])
+
+  const activeSprint =
+    projectId
+      ? (activeSprints ?? []).find((s: any) =>
+          (s.task_sprint ?? []).some((ts: any) => ts.tasks?.streams?.project_id === projectId),
+        ) ?? null
+      : (activeSprints ?? [])[0] ?? null
 
   return (
     <ReportsClient
@@ -67,6 +86,7 @@ export default async function ReportsPage() {
       savedReports={savedReports ?? []}
       weekStart={weekStart.toISOString().slice(0, 10)}
       weekEnd={weekEnd.toISOString().slice(0, 10)}
+      selectedProjectName={selectedProject?.name ?? null}
     />
   )
 }
