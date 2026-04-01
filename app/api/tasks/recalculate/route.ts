@@ -87,7 +87,7 @@ export async function POST(request: Request) {
       }
     }
 
-    return NextResponse.json({ updates, criticalPathIds })
+    return NextResponse.json({ updates, criticalPathIds: [...criticalPathIds] })
   } catch (e) {
     return NextResponse.json({ error: (e as Error).message }, { status: 500 })
   }

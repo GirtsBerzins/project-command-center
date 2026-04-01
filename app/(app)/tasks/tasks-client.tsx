@@ -30,6 +30,8 @@ import {
 } from "@/components/ui/dialog"
 import { Plus, Pencil, Trash2, User, Calendar, GripVertical, AlertTriangle, Link2, Upload } from "lucide-react"
 import { TasksImportDialog } from "./tasks-import-dialog"
+import { TasksGantt } from "./tasks-gantt"
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 
 interface Profile {
   id: string
@@ -142,6 +144,13 @@ function Avatar({ name }: { name: string | null | undefined }) {
   )
 }
 
+interface MilestoneRow {
+  id: string
+  title: string
+  due_date: string | null
+  status?: string
+}
+
 interface Props {
   initialTasks: Task[]
   streams: Stream[]
@@ -150,6 +159,7 @@ interface Props {
   initialDependencies: TaskDependencyRow[]
   projectStartDate?: string | null
   myRole?: "owner" | "manager" | "member" | "viewer"
+  initialMilestones?: MilestoneRow[]
 }
 
 export function TasksClient({
@@ -160,6 +170,7 @@ export function TasksClient({
   initialDependencies,
   projectStartDate: _projectStartDate,
   myRole,
+  initialMilestones = [],
 }: Props) {
   const router = useRouter()
   const supabase = createClient()
@@ -186,6 +197,8 @@ export function TasksClient({
   const [filterAssignee, setFilterAssignee] = useState("all")
   const [filterPriority, setFilterPriority] = useState("all")
   const [importOpen, setImportOpen] = useState(false)
+  const [milestones, setMilestones] = useState<MilestoneRow[]>(initialMilestones)
+  const [criticalPathIds, setCriticalPathIds] = useState<Set<string>>(new Set())
 
   useEffect(() => {
     setTasks(
@@ -203,6 +216,10 @@ export function TasksClient({
     setDependencies(initialDependencies)
   }, [initialDependencies])
 
+  useEffect(() => {
+    setMilestones(initialMilestones)
+  }, [initialMilestones])
+
   const recalculate = useCallback(async () => {
     if (!selectedProjectId) return
     const res = await fetch("/api/tasks/recalculate", {
@@ -213,8 +230,10 @@ export function TasksClient({
     if (!res.ok) return
     const data = (await res.json()) as {
       updates?: Record<string, { calculated_start_date: string; calculated_end_date: string; schedule_conflict: boolean }>
+      criticalPathIds?: string[]
     }
     const updates = data.updates ?? {}
+    if (data.criticalPathIds) setCriticalPathIds(new Set(data.criticalPathIds))
     setTasks((prev) =>
       prev.map((t) => {
         const u = updates[t.id]
@@ -228,6 +247,19 @@ export function TasksClient({
       }),
     )
   }, [selectedProjectId])
+
+  useEffect(() => {
+    if (selectedProjectId) void recalculate()
+  }, [selectedProjectId, recalculate])
+
+  const handleGanttDrag = useCallback(
+    async (taskId: string, newStart: string) => {
+      await supabase.from("tasks").update({ start_date: newStart, manual_override: true }).eq("id", taskId)
+      await recalculate()
+      router.refresh()
+    },
+    [supabase, recalculate, router],
+  )
 
   useEffect(() => {
     const channel = supabase
@@ -511,6 +543,35 @@ export function TasksClient({
         )}
       </div>
 
+      <Tabs defaultValue="kanban" className="w-full">
+        <TabsList className="mb-3">
+          <TabsTrigger value="kanban">Kanban</TabsTrigger>
+          <TabsTrigger value="gantt" disabled={!selectedProjectId}>
+            Ganta
+          </TabsTrigger>
+        </TabsList>
+
+        <TabsContent value="gantt" className="mt-0">
+          {selectedProjectId && (
+            <TasksGantt
+              tasks={filtered.map((t) => ({
+                id: t.id,
+                title: t.title,
+                status: t.status,
+                calculated_start_date: t.calculated_start_date,
+                calculated_end_date: t.calculated_end_date,
+                start_date: t.start_date,
+                due_date: t.due_date,
+              }))}
+              dependencies={dependencies}
+              milestones={milestones.map((m) => ({ id: m.id, title: m.title, due_date: m.due_date }))}
+              criticalPathIds={criticalPathIds}
+              onTaskDragEnd={handleGanttDrag}
+            />
+          )}
+        </TabsContent>
+
+        <TabsContent value="kanban" className="mt-0">
       <DragDropContext onDragEnd={onDragEnd}>
         <div className="grid grid-cols-4 gap-3 min-h-[500px]">
           {COLUMNS.map((col) => {
@@ -622,6 +683,8 @@ export function TasksClient({
           })}
         </div>
       </DragDropContext>
+        </TabsContent>
+      </Tabs>
 
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
         <DialogContent className="sm:max-w-lg max-h-[90vh] overflow-y-auto">
