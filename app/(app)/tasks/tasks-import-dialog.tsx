@@ -26,6 +26,7 @@ import {
   TableRow,
 } from "@/components/ui/table"
 import { Download, Upload } from "lucide-react"
+import { cn } from "@/lib/utils"
 
 type StreamOpt = { id: string; name: string }
 type ProfileOpt = { id: string; full_name: string | null; email?: string | null }
@@ -246,13 +247,15 @@ function normalizePriorityForApi(raw: string): string {
 export function TasksImportDialog(props: {
   open: boolean
   onOpenChange: (o: boolean) => void
-  projectId: string
+  /** Ja nav atlasīts projekts, importu nevar apstiprināt. */
+  projectId: string | null
   streams: StreamOpt[]
   profiles: ProfileOpt[]
   existingTasks: TaskOpt[]
   onImported: () => void
 }) {
   const { open, onOpenChange, projectId, streams, profiles, existingTasks, onImported } = props
+  const canImport = Boolean(projectId)
   const [step, setStep] = useState<"upload" | "map" | "preview">("upload")
   const [rawRows, setRawRows] = useState<string[][]>([])
   const [headers, setHeaders] = useState<string[]>([])
@@ -443,6 +446,10 @@ export function TasksImportDialog(props: {
   }
 
   async function confirmImport() {
+    if (!projectId) {
+      setErr("Atlasiet projektu sānjoslā vai izmantojiet saiti ar ?project_id=…")
+      return
+    }
     setErr(null)
     setLoading(true)
     try {
@@ -518,8 +525,15 @@ export function TasksImportDialog(props: {
 
         {step === "upload" && (
           <div className="space-y-3">
+            {!canImport && (
+              <p className="text-sm text-amber-800 dark:text-amber-200 bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-800 rounded-md px-3 py-2">
+                Lai importētu, atlasiet projektu sānjoslē (vai atveriet lapu ar atlasītu projektu). Veidni var
+                lejupielādēt arī bez projekta.
+              </p>
+            )}
             <p className="text-sm text-muted-foreground">
-              Obligāti lauki pēc kartēšanas: nosaukums un plānotās stundas. Atlasiet projektu sānjoslā pirms importa.
+              Obligāti lauki pēc kartēšanas: nosaukums un plānotās stundas.
+              {canImport ? " Varat augšupielādēt failu." : " Pēc projekta atlases varēsiet augšupielādēt failu."}
             </p>
             <Button
               type="button"
@@ -536,13 +550,19 @@ export function TasksImportDialog(props: {
             </p>
             <label
               htmlFor="tasks-import-file"
-              className="flex flex-col items-center justify-center border-2 border-dashed rounded-lg p-8 cursor-pointer hover:bg-muted/50"
+              className={cn(
+                "flex flex-col items-center justify-center border-2 border-dashed rounded-lg p-8",
+                canImport ? "cursor-pointer hover:bg-muted/50" : "cursor-not-allowed opacity-50 pointer-events-none",
+              )}
             >
               <Upload className="h-8 w-8 text-muted-foreground mb-2" />
-              <span className="text-sm">Izvēlieties .csv vai .xlsx</span>
+              <span className="text-sm">
+                {canImport ? "Izvēlieties .csv vai .xlsx" : "Vispirms atlasiet projektu"}
+              </span>
               <input
                 id="tasks-import-file"
                 type="file"
+                disabled={!canImport}
                 accept=".csv,.xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
                 className="sr-only"
                 onChange={(e) => onFile(e.target.files?.[0] ?? null)}
@@ -636,7 +656,10 @@ export function TasksImportDialog(props: {
               <Button variant="outline" onClick={() => setStep("map")}>
                 Atpakaļ
               </Button>
-              <Button onClick={confirmImport} disabled={loading || preview.length === 0}>
+              <Button
+                onClick={confirmImport}
+                disabled={loading || preview.length === 0 || !canImport}
+              >
                 {loading ? "Importē…" : "Apstiprināt importu"}
               </Button>
             </DialogFooter>

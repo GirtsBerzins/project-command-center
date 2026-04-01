@@ -1,7 +1,7 @@
 "use client"
 
 import Link from "next/link"
-import { usePathname } from "next/navigation"
+import { usePathname, useSearchParams } from "next/navigation"
 import {
   LayoutDashboard,
   Layers,
@@ -47,20 +47,46 @@ const navItems = [
 
 type Role = "owner" | "manager" | "member" | "viewer"
 
+function readStoredProject(): StoredProject | null {
+  if (typeof window === "undefined") return null
+  try {
+    const raw = window.localStorage.getItem(PROJECT_STORAGE_KEY)
+    return raw ? (JSON.parse(raw) as StoredProject) : null
+  } catch {
+    return null
+  }
+}
+
+/** Pievieno ?project_id=… ja atlasīts konkrēts projekts (saglabā kontekstu starp lapām). */
+function hrefWithProject(base: string, projectId: string | null): string {
+  if (!projectId) return base
+  const sep = base.includes("?") ? "&" : "?"
+  return `${base}${sep}project_id=${encodeURIComponent(projectId)}`
+}
+
 export function AppNav({ initialRole }: { initialRole?: Role }) {
   const pathname = usePathname()
+  const searchParams = useSearchParams()
+  const searchKey = searchParams.toString()
+  const urlProjectId = searchParams.get("project_id")
   const supabase = createClient()
-  const [selectedProject] = useState<StoredProject | null>(() => {
-    if (typeof window === "undefined") return null
-    try {
-      const raw = window.localStorage.getItem(PROJECT_STORAGE_KEY)
-      return raw ? (JSON.parse(raw) as StoredProject) : null
-    } catch {
-      return null
-    }
-  })
+
+  const [storedProject, setStoredProject] = useState<StoredProject | null>(null)
   const [projects, setProjects] = useState<NavProject[]>([])
   const [myRole, setMyRole] = useState<Role | null>(initialRole ?? null)
+
+  useEffect(() => {
+    setStoredProject(readStoredProject())
+  }, [pathname, searchKey])
+
+  const activeProjectId = urlProjectId ?? storedProject?.id ?? null
+
+  const displayProjectName =
+    activeProjectId == null
+      ? (storedProject?.name ?? "Visi projekti")
+      : (projects.find((p) => p.id === activeProjectId)?.name ??
+        (storedProject?.id === activeProjectId ? storedProject.name : null) ??
+        "Projekts")
 
   useEffect(() => {
     let cancelled = false
@@ -98,11 +124,7 @@ export function AppNav({ initialRole }: { initialRole?: Role }) {
                   "outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 ring-offset-sidebar-background",
                 )}
               >
-                <span className="truncate text-left">
-                  {selectedProject?.id
-                    ? selectedProject.name
-                    : (selectedProject?.name ?? "Visi projekti")}
-                </span>
+                <span className="truncate text-left">{displayProjectName}</span>
                 <ChevronDown className="h-3.5 w-3.5 shrink-0 opacity-60" aria-hidden />
               </button>
             </DropdownMenuTrigger>
@@ -112,7 +134,7 @@ export function AppNav({ initialRole }: { initialRole?: Role }) {
               className="w-[var(--radix-dropdown-menu-trigger-width)] min-w-[12rem] max-h-[min(70vh,18rem)] overflow-y-auto"
             >
               <DropdownMenuRadioGroup
-                value={selectedProject?.id ?? "__all__"}
+                value={activeProjectId ?? "__all__"}
                 onValueChange={(v) => {
                   if (v === "__all__") {
                     updateSelectedProject({ id: null, name: "Visi projekti" })
@@ -139,7 +161,7 @@ export function AppNav({ initialRole }: { initialRole?: Role }) {
         {navItems.map(({ href, label, icon: Icon }) => (
           <Link
             key={href}
-            href={href}
+            href={hrefWithProject(href, activeProjectId)}
             className={cn(
               "flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium transition-colors",
               pathname.startsWith(href)
@@ -153,7 +175,7 @@ export function AppNav({ initialRole }: { initialRole?: Role }) {
         ))}
         {(myRole === "owner" || myRole === "manager") && (
           <Link
-            href="/settings"
+            href={hrefWithProject("/settings", activeProjectId)}
             className={cn(
               "flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium transition-colors",
               pathname.startsWith("/settings")

@@ -1,3 +1,4 @@
+import { Suspense } from "react"
 import { AppNav } from "@/components/app-nav"
 import { FirstRunOnboarding } from "@/components/first-run-onboarding"
 import { createClient } from "@/lib/supabase/server"
@@ -21,7 +22,13 @@ export default async function AppLayout({ children }: { children: React.ReactNod
 
   return (
     <div className="flex min-h-screen">
-      <AppNav initialRole={(me?.role as "owner" | "manager" | "member" | "viewer" | undefined) ?? undefined} />
+      <Suspense
+        fallback={
+          <aside className="w-56 shrink-0 border-r bg-sidebar-background min-h-screen" aria-hidden />
+        }
+      >
+        <AppNav initialRole={(me?.role as "owner" | "manager" | "member" | "viewer" | undefined) ?? undefined} />
+      </Suspense>
       <main className="flex-1 p-6 bg-background overflow-auto">
         <FirstRunOnboarding showForOwner={me?.role === "owner"} />
         {children}
