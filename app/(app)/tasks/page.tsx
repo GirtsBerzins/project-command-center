@@ -1,5 +1,5 @@
 import { createClient } from "@/lib/supabase/server"
-import { TasksClient } from "./tasks-client"
+import { TasksClient, type TaskDependencyRow } from "./tasks-client"
 
 export default async function TasksPage({ searchParams }: { searchParams?: Promise<{ project_id?: string }> | { project_id?: string } }) {
   const supabase = await createClient()
@@ -37,7 +37,7 @@ export default async function TasksPage({ searchParams }: { searchParams?: Promi
   const taskList = tasks ?? []
   const taskIds = taskList.map((t) => t.id)
 
-  const [{ data: depsOut }, { data: depsIn }] = await Promise.all([
+  const [{ data: depsOut }, { data: depsIn }, { data: projectRow }] = await Promise.all([
     taskIds.length > 0
       ? supabase.from("task_dependencies").select("id, task_id, depends_on_task_id, type").in("task_id", taskIds)
       : Promise.resolve({ data: [] as { id: string; task_id: string; depends_on_task_id: string; type: string }[] }),
@@ -53,7 +53,10 @@ export default async function TasksPage({ searchParams }: { searchParams?: Promi
   for (const d of [...(depsOut ?? []), ...(depsIn ?? [])]) {
     depMap.set(d.id, d)
   }
-  const initialDependencies = [...depMap.values()]
+  const initialDependencies: TaskDependencyRow[] = [...depMap.values()].map((d) => ({
+    ...d,
+    type: d.type === "parallel" ? "parallel" : "sequential",
+  }))
 
   const myRole = (me?.role as "owner" | "manager" | "member" | "viewer" | undefined) ?? undefined
 
