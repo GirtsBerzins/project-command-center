@@ -42,3 +42,6 @@ next-env.d.ts
 
 # local sensitive notes
 github-Personal access tokens
+
+# Supabase CLI local temp (never commit)
+supabase/.temp/
