@@ -25,7 +25,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table"
-import { Upload } from "lucide-react"
+import { Download, Upload } from "lucide-react"
 
 type StreamOpt = { id: string; name: string }
 type ProfileOpt = { id: string; full_name: string | null; email?: string | null }
@@ -34,6 +34,7 @@ type TaskOpt = { id: string; title: string }
 type TargetKey =
   | "_skip"
   | "name"
+  | "description"
   | "estimated_hours"
   | "assignee"
   | "priority"
@@ -47,6 +48,7 @@ type TargetKey =
 const TARGETS: { key: TargetKey; label: string; required?: boolean }[] = [
   { key: "_skip", label: "— ignorēt —" },
   { key: "name", label: "Nosaukums (virsraksts)", required: true },
+  { key: "description", label: "Apraksts" },
   { key: "estimated_hours", label: "Plānotās stundas", required: true },
   { key: "assignee", label: "Izpildītājs (e-pasts)" },
   { key: "priority", label: "Prioritāte" },
@@ -57,6 +59,100 @@ const TARGETS: { key: TargetKey; label: string; required?: boolean }[] = [
   { key: "depends_on", label: "Atkarīgs no (nosaukums)" },
   { key: "parallel", label: "Paralēls (jā/nē)" },
 ]
+
+/** Veidne: pirmā rinda — instrukcijas, otrā — lauku nosaukumi (title, …). */
+const IMPORT_TEMPLATE_INSTRUCTION_ROW = [
+  "Obligāts. Īss uzdevuma nosaukums.",
+  "Brīvas formas apraksts (nav obligāts).",
+  "Straumes nosaukums kā projektā; ja tukšs — bez straumes.",
+  "Izpildītāja e-pasts (kā sistēmas profilā).",
+  "Prioritāte: augsta / vidēja / zema vai high / medium / low / critical.",
+  "Statuss: todo, in_progress, review, done.",
+  "Sākuma datums: dd.mm.gggg vai YYYY-MM-DD.",
+  "Termiņš: dd.mm.gggg vai YYYY-MM-DD.",
+  "Plānotās stundas (skaitlis; importam obligāti jāaizpilda vai jākartē).",
+  "Cita uzdevuma nosaukums (šajā failā vai jau sistēmā) priekštečam.",
+  "Paralēla atkarība: jā vai nē (noklusējums — secīga).",
+]
+
+const IMPORT_TEMPLATE_HEADER_ROW = [
+  "title",
+  "description",
+  "stream",
+  "assignee_email",
+  "priority",
+  "status",
+  "start_date",
+  "end_date",
+  "estimated_hours",
+  "depends_on",
+  "parallel",
+]
+
+const IMPORT_TEMPLATE_EXAMPLE_ROWS: string[][] = [
+  [
+    "Ārkārtas kļūdu labojums",
+    "Novērst reģistrācijas kļūdu mobilajā skatā.",
+    "Backend",
+    "jana@piemers.lv",
+    "augsta",
+    "in_progress",
+    "02.04.2026",
+    "05.04.2026",
+    "6",
+    "",
+    "nē",
+  ],
+  [
+    "API dokumentācija",
+    "OpenAPI specifikācija un pieprasījumu piemēri.",
+    "Backend",
+    "",
+    "vidēja",
+    "todo",
+    "",
+    "15.04.2026",
+    "12",
+    "Ārkārtas kļūdu labojums",
+    "nē",
+  ],
+  [
+    "Izvietošana staging",
+    "Automātisks deploy un smoke testi.",
+    "DevOps",
+    "peteris@piemers.lv",
+    "zema",
+    "review",
+    "10.04.2026",
+    "11.04.2026",
+    "3",
+    "API dokumentācija",
+    "jā",
+  ],
+]
+
+function downloadImportTemplateXlsx() {
+  const aoa = [IMPORT_TEMPLATE_INSTRUCTION_ROW, IMPORT_TEMPLATE_HEADER_ROW, ...IMPORT_TEMPLATE_EXAMPLE_ROWS]
+  const ws = XLSX.utils.aoa_to_sheet(aoa)
+  ws["!cols"] = IMPORT_TEMPLATE_HEADER_ROW.map(() => ({ wch: 30 }))
+  const wb = XLSX.utils.book_new()
+  XLSX.utils.book_append_sheet(wb, ws, "Uzdevumi")
+  XLSX.writeFile(wb, "uzdevumu_importa_veidne.xlsx")
+}
+
+function gridHasTitleHeaderRow(row: string[]): boolean {
+  return row.some((c) => String(c).trim().toLowerCase() === "title")
+}
+
+function splitInstructionsHeadersAndRows(grid: string[][]): { headers: string[]; dataRows: string[][] } | null {
+  if (grid.length < 2) return null
+  if (gridHasTitleHeaderRow(grid[1])) {
+    const h = grid[1].map((c, i) => (String(c).trim() ? String(c).trim() : `Kolonna ${i + 1}`))
+    return { headers: h, dataRows: grid.slice(2) }
+  }
+  const h = grid[0].map((c, i) => (String(c).trim() ? String(c).trim() : `Kolonna ${i + 1}`))
+  return { headers: h, dataRows: grid.slice(1) }
+}
 
 function parseRawGrid(file: File): Promise<string[][]> {
   return new Promise((resolve, reject) => {
@@ -114,9 +210,37 @@ function normYes(v: string): boolean {
 function normalizeDateCell(v: string): string | null {
   const s = v.trim()
   if (/^\d{4}-\d{2}-\d{2}$/.test(s)) return s
+  const dm = /^(\d{1,2})\.(\d{1,2})\.(\d{4})$/.exec(s)
+  if (dm) {
+    const day = Number(dm[1])
+    const month = Number(dm[2])
+    const year = Number(dm[3])
+    if (month >= 1 && month <= 12 && day >= 1 && day <= 31) {
+      const iso = `${year}-${String(month).padStart(2, "0")}-${String(day).padStart(2, "0")}`
+      const check = new Date(`${iso}T12:00:00.000Z`)
+      if (
+        check.getUTCFullYear() === year &&
+        check.getUTCMonth() + 1 === month &&
+        check.getUTCDate() === day
+      ) {
+        return iso
+      }
+    }
+  }
   const d = new Date(s)
   if (!Number.isNaN(d.getTime())) return d.toISOString().slice(0, 10)
   return null
+}
+
+/** Mapē latviešu / angļu prioritātes tekstu uz API vērtībām. */
+function normalizePriorityForApi(raw: string): string {
+  const s = raw.trim().toLowerCase()
+  if (["low", "medium", "high", "critical"].includes(s)) return s
+  if (s.includes("augst") || s === "augsta") return "high"
+  if (s.includes("krit")) return "critical"
+  if (s.includes("vidēj") || s.includes("videj") || s.includes("vidēja")) return "medium"
+  if (s.includes("zem") || s === "zema") return "low"
+  return "medium"
 }
 
 export function TasksImportDialog(props: {
@@ -159,19 +283,22 @@ export function TasksImportDialog(props: {
     setLoading(true)
     try {
       const grid = await parseRawGrid(f)
-      if (grid.length < 2) {
-        setErr("Fails ir tukšs vai bez datu rindām.")
+      const split = splitInstructionsHeadersAndRows(grid)
+      if (!split || split.dataRows.length === 0) {
+        setErr("Fails ir tukšs vai bez datu rindām (pēc virsraksta rindas).")
         setLoading(false)
         return
       }
-      const h = grid[0].map((c, i) => (c.trim() ? c.trim() : `Kolonna ${i + 1}`))
+      const { headers: h, dataRows } = split
       setHeaders(h)
-      setRawRows(grid.slice(1))
+      setRawRows(dataRows)
       const init: Record<number, TargetKey> = {}
       h.forEach((col, i) => {
         const low = col.toLowerCase()
-        if (low.includes("name") || low.includes("nosauk") || low.includes("title") || low.includes("uzdev"))
+        if (low === "title" || low.includes("name") || low.includes("nosauk") || low.includes("uzdev"))
           init[i] = "name"
+        else if (low.includes("descr") || low.includes("aprakst"))
+          init[i] = "description"
         else if (low.includes("hour") || low.includes("stund") || low.includes("estimate") || low.includes("laiks"))
           init[i] = "estimated_hours"
         else if (low.includes("mail") || low.includes("e-p") || low.includes("assign"))
@@ -213,6 +340,7 @@ export function TasksImportDialog(props: {
     const out: {
       tempId: string
       title: string
+      description: string | null
       estimate_hours: number
       assignee_id: string | null
       stream_id: string | null
@@ -248,10 +376,15 @@ export function TasksImportDialog(props: {
       }
 
       const pc = need("priority")
-      const priority = pc != null ? (row[pc] ?? "").trim().toLowerCase() : "medium"
+      const priority =
+        pc != null && (row[pc] ?? "").trim() ? normalizePriorityForApi(row[pc] ?? "") : "medium"
 
       const stc = need("status")
       const status = stc != null ? (row[stc] ?? "").trim().toLowerCase() : "todo"
+
+      const descCol = need("description")
+      const description =
+        descCol != null && (row[descCol] ?? "").trim() ? (row[descCol] ?? "").trim() : null
 
       const sdc = need("start_date")
       const start_date =
@@ -273,6 +406,7 @@ export function TasksImportDialog(props: {
       out.push({
         tempId: `t${ri}`,
         title,
+        description,
         estimate_hours: hours,
         assignee_id,
         stream_id,
@@ -315,10 +449,11 @@ export function TasksImportDialog(props: {
       const tasksPayload = preview.map((p) => ({
         temp_id: p.tempId,
         title: p.title,
+        description: p.description,
         estimate_hours: p.estimate_hours,
         assignee_id: p.assignee_id,
         stream_id: p.stream_id,
-        priority: p.priority,
+        priority: normalizePriorityForApi(p.priority),
         status: p.status,
         start_date: p.start_date,
         due_date: p.due_date,
@@ -385,6 +520,19 @@ export function TasksImportDialog(props: {
           <div className="space-y-3">
             <p className="text-sm text-muted-foreground">
               Obligāti lauki pēc kartēšanas: nosaukums un plānotās stundas. Atlasiet projektu sānjoslā pirms importa.
+            </p>
+            <Button
+              type="button"
+              variant="outline"
+              className="w-full sm:w-auto gap-2"
+              onClick={() => downloadImportTemplateXlsx()}
+            >
+              <Download className="h-4 w-4" />
+              Lejupielādēt veidni (.xlsx)
+            </Button>
+            <p className="text-xs text-muted-foreground">
+              Veidnē pirmā rinda īsi apraksta kolonnas, otrā — lauku nosaukumi (title, description, …). Var dzēst
+              piemēra rindas un aizpildīt savus datus; galvenais ir saglabāt otro rindu vai pielāgot kartēšanu.
             </p>
             <label
               htmlFor="tasks-import-file"
@@ -456,6 +604,7 @@ export function TasksImportDialog(props: {
                 <TableHeader>
                   <TableRow>
                     <TableHead className="text-xs">Nosaukums</TableHead>
+                    <TableHead className="text-xs">Apraksts</TableHead>
                     <TableHead className="text-xs">Stundas</TableHead>
                     <TableHead className="text-xs">Straume</TableHead>
                     <TableHead className="text-xs">Atkarīgs no</TableHead>
@@ -466,6 +615,9 @@ export function TasksImportDialog(props: {
                   {preview.map((p) => (
                     <TableRow key={p.tempId}>
                       <TableCell className="text-xs font-medium">{p.title}</TableCell>
+                      <TableCell className="text-xs max-w-[140px] truncate" title={p.description ?? undefined}>
+                        {p.description ?? "—"}
+                      </TableCell>
                       <TableCell className="text-xs">{p.estimate_hours}</TableCell>
                       <TableCell className="text-xs">
                         {p.stream_id ? streams.find((s) => s.id === p.stream_id)?.name ?? "—" : "—"}

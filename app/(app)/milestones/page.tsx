@@ -36,17 +36,21 @@ export default async function MilestonesPage({
 
   if (projectId) milestonesQuery = milestonesQuery.eq("project_id", projectId)
 
-  const [{ data: milestones }, { data: projects }, { data: streamsForProject }] = await Promise.all([
+  const [{ data: milestones }, { data: projects }] = await Promise.all([
     milestonesQuery,
     supabase.from("projects").select("id, name").order("name"),
-    projectId ? supabase.from("streams").select("id").eq("project_id", projectId) : Promise.resolve({ data: [] as { id: string }[] }),
   ])
 
-  const streamIds = (streamsForProject ?? []).map((s) => s.id)
-  const { data: tasks } =
-    streamIds.length > 0
-      ? await supabase.from("tasks").select("id, title, status").in("stream_id", streamIds)
-      : { data: [] as { id: string; title: string; status: string }[] }
+  const tasksQuery = supabase
+    .from("tasks")
+    .select("id, title, status, streams!inner(id, project_id)")
+    .order("title")
+  if (projectId) {
+    tasksQuery.eq("streams.project_id", projectId)
+  }
+  const { data: tasks } = projectId
+    ? await tasksQuery
+    : { data: [] as { id: string; title: string; status: string }[] }
 
   const { data: links } =
     milestones && milestones.length > 0
@@ -64,7 +68,11 @@ export default async function MilestonesPage({
       initialMilestones={milestones ?? []}
       projectId={projectId}
       projects={projects ?? []}
-      tasks={(tasks ?? []) as { id: string; title: string; status: string }[]}
+      tasks={
+        ((tasks ?? []) as { id: string; title: string; status: string; streams?: unknown }[]).map(
+          ({ id, title, status }) => ({ id, title, status }),
+        )
+      }
       links={links ?? []}
       myRole={role as "owner" | "manager" | "member" | "viewer" | undefined}
     />

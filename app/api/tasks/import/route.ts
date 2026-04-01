@@ -6,6 +6,7 @@ type ImportTaskIn = {
   temp_id: string
   title: string
   estimate_hours: number
+  description?: string | null
   assignee_id?: string | null
   stream_id?: string | null
   priority?: string
@@ -68,6 +69,7 @@ export async function POST(request: Request) {
         .from("tasks")
         .insert({
           title: row.title.trim(),
+          description: row.description?.trim() ? row.description.trim() : null,
           stream_id: streamId,
           assignee_id: row.assignee_id ?? null,
           priority,

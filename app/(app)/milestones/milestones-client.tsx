@@ -17,6 +17,7 @@ import {
 import {
   Dialog,
   DialogContent,
+  DialogDescription,
   DialogFooter,
   DialogHeader,
   DialogTitle,
@@ -57,6 +58,16 @@ const STATUS_BADGE: Record<string, "secondary" | "success" | "destructive"> = {
   missed: "destructive",
 }
 
+/** Latvian count phrase for "task(s)" */
+function linkedTasksCountLabel(n: number): string {
+  if (n === 0) return "0 uzdevumu"
+  const m10 = n % 10
+  const m100 = n % 100
+  if (m10 === 1 && m100 !== 11) return `${n} uzdevums`
+  if (m10 > 1 && m10 < 10 && (m100 < 10 || m100 > 20)) return `${n} uzdevumi`
+  return `${n} uzdevumu`
+}
+
 export function MilestonesClient(props: {
   initialMilestones: Milestone[]
   projectId: string | null
@@ -78,6 +89,7 @@ export function MilestonesClient(props: {
   const [dueDate, setDueDate] = useState("")
   const [status, setStatus] = useState("planned")
   const [selectedTasks, setSelectedTasks] = useState<string[]>([])
+  const [taskSearch, setTaskSearch] = useState("")
   const [saving, setSaving] = useState(false)
 
   const canEdit = myRole === "owner" || myRole === "manager"
@@ -107,6 +119,7 @@ export function MilestonesClient(props: {
     setDueDate("")
     setStatus("planned")
     setSelectedTasks([])
+    setTaskSearch("")
     setDialogOpen(true)
   }
 
@@ -117,6 +130,7 @@ export function MilestonesClient(props: {
     setDueDate(m.due_date ?? "")
     setStatus(m.status)
     setSelectedTasks(linkByMilestone.get(m.id) ?? [])
+    setTaskSearch("")
     setDialogOpen(true)
   }
 
@@ -139,14 +153,41 @@ export function MilestonesClient(props: {
         due_date: dueDate || null,
         status,
       }
+      let milestoneId: string | null = null
+      let priorCompletedAt: string | null = null
+
       if (editing) {
         await supabase.from("milestones").update(payload).eq("id", editing.id)
         await persistLinks(editing.id, selectedTasks)
+        milestoneId = editing.id
+        priorCompletedAt = editing.completed_at
       } else {
-        const { data: ins, error } = await supabase.from("milestones").insert(payload).select("id").single()
+        const { data: ins, error } = await supabase
+          .from("milestones")
+          .insert(payload)
+          .select("id, completed_at")
+          .single()
         if (error) throw error
-        if (ins?.id) await persistLinks(ins.id, selectedTasks)
+        if (ins?.id) {
+          await persistLinks(ins.id, selectedTasks)
+          milestoneId = ins.id
+          priorCompletedAt = ins.completed_at
+        }
       }
+
+      if (milestoneId && selectedTasks.length > 0) {
+        const allDone = selectedTasks.every((tid) => tasks.find((t) => t.id === tid)?.status === "done")
+        if (allDone) {
+          await supabase
+            .from("milestones")
+            .update({
+              status: "reached",
+              completed_at: priorCompletedAt ?? new Date().toISOString(),
+            })
+            .eq("id", milestoneId)
+        }
+      }
+
       setDialogOpen(false)
       router.refresh()
     } finally {
@@ -167,6 +208,14 @@ export function MilestonesClient(props: {
   }
 
   const projectName = projects.find((p) => p.id === projectId)?.name
+
+  const filteredTasksForPicker = useMemo(() => {
+    const q = taskSearch.trim().toLowerCase()
+    if (!q) return tasks
+    return tasks.filter((t) => t.title.toLowerCase().includes(q))
+  }, [tasks, taskSearch])
+
+  const emptyColSpan = canEdit ? 5 : 4
 
   return (
     <div className="space-y-4">
@@ -202,14 +251,15 @@ export function MilestonesClient(props: {
           <TableBody>
             {rows.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={5} className="text-muted-foreground text-sm">
-                  Nav atskaišu punktu.
+                <TableCell colSpan={emptyColSpan} className="text-muted-foreground text-sm py-10 text-center">
+                  Nav atskaites punktu. Izveidojiet pirmo!
                 </TableCell>
               </TableRow>
             ) : (
               rows.map((m) => {
                 const tids = linkByMilestone.get(m.id) ?? []
                 const done = tids.filter((tid) => tasks.find((t) => t.id === tid)?.status === "done").length
+                const allLinkedDone = tids.length > 0 && done === tids.length
                 return (
                   <TableRow key={m.id}>
                     <TableCell className="font-medium">{m.title}</TableCell>
@@ -220,7 +270,21 @@ export function MilestonesClient(props: {
                       <Badge variant={STATUS_BADGE[m.status] ?? "secondary"}>{STATUS_LV[m.status] ?? m.status}</Badge>
                     </TableCell>
                     <TableCell className="text-sm text-muted-foreground">
-                      {tids.length ? `${done}/${tids.length} pabeigti` : "—"}
+                      {tids.length > 0 ? (
+                        <span>
+                          <span className="text-foreground">{linkedTasksCountLabel(tids.length)}</span>
+                          {allLinkedDone ? (
+                            <span className="text-muted-foreground"> · visi pabeigti</span>
+                          ) : (
+                            <span className="text-muted-foreground">
+                              {" "}
+                              · {done}/{tids.length} pabeigti
+                            </span>
+                          )}
+                        </span>
+                      ) : (
+                        "—"
+                      )}
                     </TableCell>
                     {canEdit && (
                       <TableCell className="text-right space-x-1">
@@ -246,9 +310,12 @@ export function MilestonesClient(props: {
       </div>
 
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
-        <DialogContent className="sm:max-w-md max-h-[90vh] overflow-y-auto">
+        <DialogContent className="sm:max-w-lg max-h-[90vh] overflow-y-auto">
           <DialogHeader>
-            <DialogTitle>{editing ? "Rediģēt" : "Jauns atskaites punkts"}</DialogTitle>
+            <DialogTitle>{editing ? "Rediģēt atskaites punktu" : "Jauns atskaites punkts"}</DialogTitle>
+            <DialogDescription>
+              Atskaites punkts ir svarīgs projekta posms vai mērķis ar konkrētu termiņu.
+            </DialogDescription>
           </DialogHeader>
           <div className="grid gap-3 py-1">
             <div className="space-y-1">
@@ -276,24 +343,72 @@ export function MilestonesClient(props: {
                 </SelectContent>
               </Select>
             </div>
-            {tasks.length > 0 && (
-              <div className="space-y-2">
-                <Label>Saistītie uzdevumi (sasniegts, kad visi pabeigti)</Label>
-                <div className="max-h-40 overflow-y-auto border rounded-md p-2 space-y-1 text-sm">
-                  {tasks.map((t) => (
-                    <label key={t.id} className="flex items-center gap-2 cursor-pointer">
-                      <input
-                        type="checkbox"
-                        checked={selectedTasks.includes(t.id)}
-                        onChange={() => toggleTask(t.id)}
-                        className="rounded border"
-                      />
-                      <span className="truncate">{t.title}</span>
-                    </label>
-                  ))}
-                </div>
+            <div className="space-y-2">
+              <div>
+                <Label>Saistītie uzdevumi</Label>
+                <p className="text-xs text-muted-foreground mt-1">
+                  Kad visi atlasītie uzdevumi ir ar statusu «Pabeigts», atskaites punkts automātiski iegūst statusu
+                  «Sasniegts».
+                </p>
               </div>
-            )}
+              {!projectId ? (
+                <p className="text-sm text-muted-foreground border rounded-md p-3">
+                  Atlasiet projektu sānjoslē, lai saistītu uzdevumus.
+                </p>
+              ) : tasks.length === 0 ? (
+                <p className="text-sm text-muted-foreground border rounded-md p-3">
+                  Šim projektam nav uzdevumu straumēs — neko nevar saistīt.
+                </p>
+              ) : (
+                <>
+                  <Input
+                    placeholder="Meklēt uzdevumu…"
+                    value={taskSearch}
+                    onChange={(e) => setTaskSearch(e.target.value)}
+                    className="h-9"
+                  />
+                  <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+                    <span>
+                      Atlasīti: {selectedTasks.length} / {tasks.length}
+                    </span>
+                    {selectedTasks.length > 0 && (
+                      <Button type="button" variant="ghost" size="sm" className="h-7 px-2" onClick={() => setSelectedTasks([])}>
+                        Notīrīt
+                      </Button>
+                    )}
+                  </div>
+                  <div
+                    className="max-h-48 overflow-y-auto border rounded-md p-2 space-y-1 text-sm"
+                    role="group"
+                    aria-label="Saistītie uzdevumi — vairāku izvēle"
+                  >
+                    {filteredTasksForPicker.length === 0 ? (
+                      <p className="text-muted-foreground text-xs py-2 px-1">Nav rezultātu meklējumam.</p>
+                    ) : (
+                      filteredTasksForPicker.map((t) => (
+                        <label
+                          key={t.id}
+                          className="flex items-start gap-2 cursor-pointer rounded-sm px-1 py-1 hover:bg-muted/60"
+                        >
+                          <input
+                            type="checkbox"
+                            checked={selectedTasks.includes(t.id)}
+                            onChange={() => toggleTask(t.id)}
+                            className="mt-1 rounded border"
+                          />
+                          <span className="min-w-0 flex-1">
+                            <span className="block truncate">{t.title}</span>
+                            <span className="text-xs text-muted-foreground">
+                              {t.status === "done" ? "Pabeigts" : "Nav pabeigts"}
+                            </span>
+                          </span>
+                        </label>
+                      ))
+                    )}
+                  </div>
+                </>
+              )}
+            </div>
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setDialogOpen(false)}>
