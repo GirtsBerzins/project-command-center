@@ -94,6 +94,9 @@ export async function POST(request: Request) {
     if (!body.role) {
       return NextResponse.json({ error: "Loma ir obligāta" }, { status: 400 })
     }
+    if (role === "manager" && !["member", "viewer"].includes(body.role)) {
+      return NextResponse.json({ error: "Pārvaldnieks var uzaicināt tikai dalībnieku vai skatītāju" }, { status: 403 })
+    }
   }
 
   try {
@@ -150,8 +153,16 @@ export async function PATCH(request: Request) {
     return NextResponse.json({ error: "Lietotājs nav atrasts" }, { status: 404 })
   }
 
+  const { count: ownerCount } = await supabase
+    .from("profiles")
+    .select("id", { count: "exact", head: true })
+    .eq("role", "owner")
+
   if (role === "owner") {
-    // owner var mainīt jebkuru lomu
+    // owner var mainīt jebkuru lomu, bet nedrīkst atstāt sistēmu bez īpašnieka
+    if (target.role === "owner" && nextRole !== "owner" && (ownerCount ?? 0) <= 1) {
+      return NextResponse.json({ error: "Sistēmā jāpaliek vismaz vienam īpašniekam" }, { status: 400 })
+    }
   } else if (role === "manager") {
     const allowed = ["member", "viewer"]
     if (!allowed.includes(target.role) || !allowed.includes(nextRole)) {
@@ -159,6 +170,20 @@ export async function PATCH(request: Request) {
     }
   } else {
     return NextResponse.json({ error: "Nav tiesību mainīt lomas" }, { status: 403 })
+  }
+
+  if (role === "owner" && nextRole === "owner" && userId !== user.id) {
+    // Owner-only transfer ownership:
+    // promote target to owner, then demote current owner to manager.
+    const { error: promoteError } = await supabase.from("profiles").update({ role: "owner" }).eq("id", userId)
+    if (promoteError) return NextResponse.json({ error: promoteError.message }, { status: 400 })
+
+    const { error: demoteError } = await supabase.from("profiles").update({ role: "manager" }).eq("id", user.id)
+    if (demoteError) {
+      return NextResponse.json({ error: demoteError.message }, { status: 400 })
+    }
+
+    return NextResponse.json({ ok: true, transfer: true })
   }
 
   const { error } = await supabase.from("profiles").update({ role: nextRole }).eq("id", userId)

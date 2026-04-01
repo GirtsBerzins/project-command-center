@@ -118,6 +118,8 @@ export default function TeamPage() {
       }),
     [members],
   )
+  const currentOwnerId = useMemo(() => sortedMembers.find((m) => m.role === "owner")?.id ?? null, [sortedMembers])
+  const canTransferOwnership = (target: TeamMember) => myRole === "owner" && target.id !== currentOwnerId
 
   async function handleInvite() {
     if (!inviteEmail.trim() || !inviteName.trim()) return
@@ -176,6 +178,12 @@ export default function TeamPage() {
     setSavingRole(false)
     if (!res.ok) {
       setError((payload.error as string | undefined) ?? "Neizdevās atjaunināt lomu")
+      return
+    }
+    if (payload.transfer) {
+      setSuccess("Īpašumtiesības nodotas. Jūsu loma nomainīta uz Pārvaldnieks.")
+      await loadData()
+      setRoleTarget(null)
       return
     }
     setMembers((prev) => prev.map((m) => (m.id === roleTarget.id ? { ...m, role: nextRole } : m)))
@@ -273,6 +281,29 @@ export default function TeamPage() {
                   <div className="flex gap-1">
                     <Button
                       variant="ghost"
+                      size="sm"
+                      disabled={!canTransferOwnership(m)}
+                      onClick={async () => {
+                        setError(null)
+                        setSuccess(null)
+                        const res = await fetch("/api/team", {
+                          method: "PATCH",
+                          headers: { "Content-Type": "application/json" },
+                          body: JSON.stringify({ userId: m.id, role: "owner" }),
+                        })
+                        const payload = await readJsonSafe(res)
+                        if (!res.ok) {
+                          setError((payload.error as string | undefined) ?? "Neizdevās nodot īpašumtiesības")
+                          return
+                        }
+                        setSuccess("Īpašumtiesības nodotas.")
+                        await loadData()
+                      }}
+                    >
+                      Nodot
+                    </Button>
+                    <Button
+                      variant="ghost"
                       size="icon"
                       disabled={!canEditRole(m)}
                       onClick={() => {
@@ -331,8 +362,8 @@ export default function TeamPage() {
                 value={inviteRole}
                 onChange={(e) => setInviteRole(e.target.value as Role)}
               >
-                <option value="owner">Īpašnieks</option>
-                <option value="manager">Pārvaldnieks</option>
+                {myRole === "owner" && <option value="owner">Īpašnieks</option>}
+                {myRole === "owner" && <option value="manager">Pārvaldnieks</option>}
                 <option value="member">Dalībnieks</option>
                 <option value="viewer">Skatītājs</option>
               </select>
@@ -359,7 +390,7 @@ export default function TeamPage() {
               value={nextRole}
               onChange={(e) => setNextRole(e.target.value as Role)}
             >
-              <option value="owner">Īpašnieks</option>
+              {myRole === "owner" && <option value="owner">Īpašnieks</option>}
               <option value="manager">Pārvaldnieks</option>
               <option value="member">Dalībnieks</option>
               <option value="viewer">Skatītājs</option>
