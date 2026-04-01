@@ -1,7 +1,7 @@
 "use client"
 
 import { useState } from "react"
-import { useRouter, useSearchParams } from "next/navigation"
+import { useRouter } from "next/navigation"
 import { createClient } from "@/lib/supabase/client"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -10,7 +10,6 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 
 export default function LoginPage() {
   const router = useRouter()
-  const searchParams = useSearchParams()
   const supabase = createClient()
   const [email, setEmail] = useState("")
   const [password, setPassword] = useState("")
@@ -19,7 +18,8 @@ export default function LoginPage() {
   const [mode, setMode] = useState<"login" | "signup">("login")
   const [oauthLoading, setOauthLoading] = useState<"github" | "google" | null>(null)
   const [resetLoading, setResetLoading] = useState(false)
-  const callbackError = searchParams.get("error")
+  const callbackError =
+    typeof window !== "undefined" ? new URLSearchParams(window.location.search).get("error") : null
 
   async function handleLogin(e: React.FormEvent) {
     e.preventDefault()

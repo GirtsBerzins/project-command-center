@@ -37,6 +37,7 @@ interface Kpi {
   trend: string
   owner_id: string | null
   period: string | null
+  project_id?: string | null
   profiles: Profile | null
   kpi_values: KpiValue[]
 }
@@ -74,9 +75,11 @@ function chartData(values: KpiValue[]) {
 interface Props {
   initialKpis: Kpi[]
   profiles: Profile[]
+  selectedProjectId?: string | null
+  selectedProjectName?: string | null
 }
 
-export function KpisClient({ initialKpis, profiles }: Props) {
+export function KpisClient({ initialKpis, profiles, selectedProjectId, selectedProjectName }: Props) {
   const supabase = createClient()
   const [kpis, setKpis]               = useState<Kpi[]>(initialKpis)
   const [dialogOpen, setDialogOpen]   = useState(false)
@@ -123,6 +126,7 @@ export function KpisClient({ initialKpis, profiles }: Props) {
       trend:    form.trend,
       owner_id: form.owner_id      || null,
       period:   form.period.trim() || null,
+      project_id: selectedProjectId ?? null,
     }
 
     if (editingKpi) {
@@ -189,7 +193,10 @@ export function KpisClient({ initialKpis, profiles }: Props) {
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-bold">KPI rādītāji</h1>
-          <p className="text-sm text-muted-foreground">{kpis.length} rādītāji tiek sekoti</p>
+          <p className="text-sm text-muted-foreground">
+            {kpis.length} rādītāji tiek sekoti
+            {selectedProjectId ? ` · projekts: ${selectedProjectName ?? "atlasītais"}` : ""}
+          </p>
         </div>
         <Button onClick={openCreate}><Plus className="h-4 w-4" />Jauns KPI</Button>
       </div>

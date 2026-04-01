@@ -9,10 +9,17 @@ interface Stream {
   id: string; name: string; status: string; progress: number; deadline: string | null
 }
 interface Risk { impact: "low" | "medium" | "high"; status: string }
-interface Task { status: string }
-interface TaskSprint { task_id: string; sprint_id: string; tasks: Task }
-interface Sprint {
-  id: string; name: string; status: string; start_date: string; end_date: string
+interface TaskSprint {
+  task_id: string
+  sprint_id: string
+  tasks: { status?: string; streams?: { project_id?: string | null }[] }[] | { status?: string; streams?: { project_id?: string | null }[] } | null
+}
+interface ActiveSprint {
+  id: string
+  name: string
+  status: string
+  start_date: string
+  end_date: string
   task_sprint: TaskSprint[]
 }
 interface ActivityLog { created_at: string }
@@ -48,27 +55,56 @@ function buildSparklineData(logs: ActivityLog[]) {
   }))
 }
 
-export default async function DashboardPage() {
+export default async function DashboardPage({ searchParams }: { searchParams?: Promise<{ project_id?: string }> | { project_id?: string } }) {
   const supabase = await createClient()
+  const resolvedSearch = await Promise.resolve(searchParams)
+  const projectId = typeof resolvedSearch?.project_id === "string" ? resolvedSearch.project_id : null
+  const sevenDaysAgo = new Date()
+  sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7)
 
-  const [
-    { data: streams },
-    { data: risks },
-    { data: activeSprint },
-    { data: activityLogs },
-  ] = await Promise.all([
-    supabase.from("streams").select("id, name, status, progress, deadline").order("progress", { ascending: false }),
-    supabase.from("risks").select("impact, status").eq("status", "open"),
-    supabase.from("sprints").select(`id, name, status, start_date, end_date, task_sprint ( task_id, sprint_id, tasks ( status ) )`).eq("status", "active").limit(1).maybeSingle(),
-    supabase.from("activity_logs").select("created_at").gte("created_at", new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString()).order("created_at"),
+  const streamsQuery = supabase
+    .from("streams")
+    .select("id, name, status, progress, deadline, project_id")
+    .order("progress", { ascending: false })
+  if (projectId) {
+    streamsQuery.eq("project_id", projectId)
+  }
+
+  const [{ data: streams }, { data: risks }, { data: activeSprints }, { data: activityLogs }] = await Promise.all([
+    streamsQuery,
+    projectId
+      ? Promise.resolve({ data: [] as Risk[] })
+      : supabase.from("risks").select("impact, status").eq("status", "open"),
+    supabase
+      .from("sprints")
+      .select(`id, name, status, start_date, end_date, task_sprint ( task_id, sprint_id, tasks ( status, streams ( project_id ) ) )`)
+      .eq("status", "active"),
+    projectId
+      ? Promise.resolve({ data: [] as ActivityLog[] })
+      : supabase.from("activity_logs").select("created_at").gte("created_at", sevenDaysAgo.toISOString()).order("created_at"),
   ])
+
+  const activeSprint = ((activeSprints ?? []) as ActiveSprint[]).find((s) =>
+    !projectId
+      ? true
+      : (s.task_sprint ?? []).some(
+          (ts) => {
+            const task = Array.isArray(ts.tasks) ? ts.tasks[0] : ts.tasks
+            const stream = Array.isArray(task?.streams) ? task.streams[0] : null
+            return stream?.project_id === projectId
+          },
+        ),
+  )
 
   const riskCounts = { high: 0, medium: 0, low: 0 }
   for (const r of risks ?? []) riskCounts[r.impact as keyof typeof riskCounts]++
 
-  const sprintTasks = (activeSprint?.task_sprint ?? []) as unknown as TaskSprint[]
+  const sprintTasks = activeSprint?.task_sprint ?? []
   const totalTasks = sprintTasks.length
-  const doneTasks = sprintTasks.filter((ts) => ts.tasks?.status === "done").length
+  const doneTasks = sprintTasks.filter((ts) => {
+    const task = Array.isArray(ts.tasks) ? ts.tasks[0] : ts.tasks
+    return task?.status === "done"
+  }).length
   const sprintPct = totalTasks > 0 ? Math.round((doneTasks / totalTasks) * 100) : 0
 
   const sparklineData = buildSparklineData((activityLogs ?? []) as ActivityLog[])

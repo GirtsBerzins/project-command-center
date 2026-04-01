@@ -20,7 +20,7 @@ import { Plus, Pencil, Trash2, User, Calendar, GripVertical } from "lucide-react
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 interface Profile { id: string; full_name: string | null; email?: string | null }
-interface Stream  { id: string; name: string }
+interface Stream  { id: string; name: string; project_id?: string | null }
 
 interface Task {
   id: string
@@ -99,6 +99,7 @@ interface Props {
   initialTasks: Task[]
   streams: Stream[]
   profiles: Profile[]
+  selectedProjectId?: string | null
 }
 
 export function TasksClient({ initialTasks, streams, profiles }: Props) {

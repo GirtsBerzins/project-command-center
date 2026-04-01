@@ -1,17 +1,15 @@
 "use client"
 
 import Link from "next/link"
-import { usePathname, useRouter } from "next/navigation"
+import { usePathname } from "next/navigation"
 import { LayoutDashboard, Layers, CheckSquare, Zap, BarChart2, FileText, LogOut, FolderKanban, Users } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { createClient } from "@/lib/supabase/client"
 import { Button } from "@/components/ui/button"
 import { useEffect, useState } from "react"
-
-const PROJECT_STORAGE_KEY = "command-center:selected-project"
-
-interface StoredProject {
-  id: string | null
+import { PROJECT_STORAGE_KEY, type StoredProject, updateSelectedProject } from "@/lib/project-selection"
+interface NavProject {
+  id: string
   name: string
 }
 
@@ -28,45 +26,32 @@ const navItems = [
 
 export function AppNav() {
   const pathname = usePathname()
-  const router = useRouter()
   const supabase = createClient()
-  const [selectedProject, setSelectedProject] = useState<StoredProject | null>(null)
-
-  useEffect(() => {
-    if (typeof window === "undefined") return
+  const [selectedProject] = useState<StoredProject | null>(() => {
+    if (typeof window === "undefined") return null
     try {
       const raw = window.localStorage.getItem(PROJECT_STORAGE_KEY)
-      if (raw) {
-        const parsed = JSON.parse(raw) as StoredProject
-        setSelectedProject(parsed)
-      }
+      return raw ? (JSON.parse(raw) as StoredProject) : null
     } catch {
-      // ignore
+      return null
     }
-  }, [])
+  })
+  const [projects, setProjects] = useState<NavProject[]>([])
 
-  function updateProject(project: StoredProject | null) {
-    setSelectedProject(project)
-    if (typeof window !== "undefined") {
-      if (project) {
-        window.localStorage.setItem(PROJECT_STORAGE_KEY, JSON.stringify(project))
-      } else {
-        window.localStorage.removeItem(PROJECT_STORAGE_KEY)
-      }
+  useEffect(() => {
+    let cancelled = false
+    ;(async () => {
+      const { data } = await supabase.from("projects").select("id, name").order("created_at", { ascending: false })
+      if (!cancelled) setProjects((data ?? []) as NavProject[])
+    })()
+    return () => {
+      cancelled = true
     }
-    const url = new URL(window.location.href)
-    if (project?.id) {
-      url.searchParams.set("project_id", project.id)
-    } else {
-      url.searchParams.delete("project_id")
-    }
-    router.push(url.pathname + (url.search ? `?${url.searchParams.toString()}` : ""))
-  }
+  }, [supabase])
 
   async function handleSignOut() {
     await supabase.auth.signOut()
-    router.push("/login")
-    router.refresh()
+    window.location.href = "/login"
   }
 
   return (
@@ -82,7 +67,7 @@ export function AppNav() {
           <button
             type="button"
             onClick={() =>
-              updateProject(
+              updateSelectedProject(
                 selectedProject && selectedProject.id === null ? null : { id: null, name: "Visi projekti" },
               )
             }
@@ -97,6 +82,23 @@ export function AppNav() {
                 : selectedProject?.name ?? "Visi projekti"}
             </span>
           </button>
+          <div className="space-y-1">
+            {projects.slice(0, 6).map((p) => (
+              <button
+                key={p.id}
+                type="button"
+                onClick={() => updateSelectedProject({ id: p.id, name: p.name })}
+                className={cn(
+                  "w-full text-left rounded-md px-2 py-1 text-xs",
+                  selectedProject?.id === p.id
+                    ? "bg-sidebar-accent text-sidebar-accent-foreground"
+                    : "text-sidebar-foreground/80 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground",
+                )}
+              >
+                {p.name}
+              </button>
+            ))}
+          </div>
         </div>
       </div>
       <nav className="flex-1 p-2 space-y-1">

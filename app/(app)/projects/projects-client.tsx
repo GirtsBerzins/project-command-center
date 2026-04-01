@@ -25,10 +25,12 @@ import {
 } from "@/components/ui/table"
 import { Progress } from "@/components/ui/progress"
 import { Pencil, Plus, Trash2 } from "lucide-react"
+import { updateSelectedProject } from "@/lib/project-selection"
 
 interface Profile {
   id: string
   full_name: string | null
+  email?: string | null
 }
 
 interface ProjectWithRelations extends Project {
@@ -262,7 +264,13 @@ export function ProjectsClient({ initialProjects, profiles }: Props) {
               <TableRow key={project.id}>
                 <TableCell>
                   <div>
-                    <p className="font-medium">{project.name}</p>
+                    <button
+                      type="button"
+                      className="font-medium text-left hover:underline"
+                      onClick={() => updateSelectedProject({ id: project.id, name: project.name })}
+                    >
+                      {project.name}
+                    </button>
                     {project.description && (
                       <p className="text-xs text-muted-foreground line-clamp-1">{project.description}</p>
                     )}
@@ -270,8 +278,10 @@ export function ProjectsClient({ initialProjects, profiles }: Props) {
                 </TableCell>
                 <TableCell className="text-sm">
                   {project.profiles?.full_name ??
-                    (project.owner_id ? (
-                      <span className="text-muted-foreground">{project.owner_id.slice(0, 8)}</span>
+                    (project.profiles?.email ? (
+                      <span className="text-muted-foreground">{project.profiles.email}</span>
+                    ) : project.owner_id ? (
+                      <span className="text-muted-foreground">{project.owner_id}</span>
                     ) : (
                       <span className="text-muted-foreground">—</span>
                     ))}
@@ -350,7 +360,7 @@ export function ProjectsClient({ initialProjects, profiles }: Props) {
                   <option value="none">Nav norādīts</option>
                   {profiles.map((p) => (
                     <option key={p.id} value={p.id}>
-                      {p.full_name ?? p.id.slice(0, 8)}
+                      {p.full_name ?? p.email ?? p.id}
                     </option>
                   ))}
                 </select>

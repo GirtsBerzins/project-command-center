@@ -1,22 +1,32 @@
 import { createClient } from "@/lib/supabase/server"
 import { KpisClient } from "./kpis-client"
 
-export default async function KpisPage() {
+export default async function KpisPage({ searchParams }: { searchParams?: Promise<{ project_id?: string }> | { project_id?: string } }) {
   const supabase = await createClient()
+  const resolvedSearch = await Promise.resolve(searchParams)
+  const projectId = typeof resolvedSearch?.project_id === "string" ? resolvedSearch.project_id : null
 
-  const [{ data: kpis }, { data: profiles }] = await Promise.all([
-    supabase
-      .from("kpis")
-      .select(`
+  const kpisQuery = supabase
+    .from("kpis")
+    .select(`
         *,
         profiles(id, full_name, email),
         kpi_values ( id, value, recorded_at )
       `)
-      .order("created_at", { ascending: false }),
+    .order("created_at", { ascending: false })
+  if (projectId) {
+    kpisQuery.eq("project_id", projectId)
+  }
+
+  const [{ data: kpis }, { data: profiles }, { data: selectedProject }] = await Promise.all([
+    kpisQuery,
     supabase
       .from("profiles")
       .select("id, full_name, email")
       .order("full_name"),
+    projectId
+      ? supabase.from("projects").select("id, name").eq("id", projectId).maybeSingle()
+      : Promise.resolve({ data: null }),
   ])
 
   // Sort kpi_values by recorded_at for each KPI
@@ -32,6 +42,8 @@ export default async function KpisPage() {
     <KpisClient
       initialKpis={kpisWithSortedValues}
       profiles={profiles ?? []}
+      selectedProjectId={projectId}
+      selectedProjectName={selectedProject?.name ?? null}
     />
   )
 }

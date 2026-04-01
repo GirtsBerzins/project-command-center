@@ -10,17 +10,17 @@ export default async function ProjectsPage() {
       .select(
         `
         *,
-        profiles:owner_id ( id, full_name ),
+        profiles:owner_id ( id, full_name, email ),
         milestones ( id, status, weight_percent, due_date, completed_at )
       `,
       )
       .order("created_at", { ascending: false }),
-    supabase.from("profiles").select("id, full_name").order("full_name"),
+    supabase.from("profiles").select("id, full_name, email").order("full_name"),
   ])
 
   return (
     <ProjectsClient
-      initialProjects={(projects ?? []) as any}
+      initialProjects={projects ?? []}
       profiles={profiles ?? []}
     />
   )
