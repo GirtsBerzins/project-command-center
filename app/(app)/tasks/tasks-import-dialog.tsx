@@ -1,0 +1,496 @@
+"use client"
+
+import { useMemo, useState } from "react"
+import * as XLSX from "xlsx"
+import { Button } from "@/components/ui/button"
+import {
+  Dialog,
+  DialogContent,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog"
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select"
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table"
+import { Upload } from "lucide-react"
+
+type StreamOpt = { id: string; name: string }
+type ProfileOpt = { id: string; full_name: string | null; email?: string | null }
+type TaskOpt = { id: string; title: string }
+
+type TargetKey =
+  | "_skip"
+  | "name"
+  | "estimated_hours"
+  | "assignee"
+  | "priority"
+  | "status"
+  | "stream"
+  | "start_date"
+  | "end_date"
+  | "depends_on"
+  | "parallel"
+
+const TARGETS: { key: TargetKey; label: string; required?: boolean }[] = [
+  { key: "_skip", label: "— ignorēt —" },
+  { key: "name", label: "Nosaukums (virsraksts)", required: true },
+  { key: "estimated_hours", label: "Plānotās stundas", required: true },
+  { key: "assignee", label: "Izpildītājs (e-pasts)" },
+  { key: "priority", label: "Prioritāte" },
+  { key: "status", label: "Statuss" },
+  { key: "stream", label: "Straume (nosaukums)" },
+  { key: "start_date", label: "Sākuma datums" },
+  { key: "end_date", label: "Beigu / termiņa datums" },
+  { key: "depends_on", label: "Atkarīgs no (nosaukums)" },
+  { key: "parallel", label: "Paralēls (jā/nē)" },
+]
+
+function parseRawGrid(file: File): Promise<string[][]> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader()
+    reader.onload = (e) => {
+      try {
+        const ab = e.target?.result
+        if (!ab) {
+          resolve([])
+          return
+        }
+        const name = file.name.toLowerCase()
+        if (name.endsWith(".csv")) {
+          const text = new TextDecoder().decode(ab as ArrayBuffer)
+          const lines = text.split(/\r?\n/).filter((l) => l.trim().length > 0)
+          const rows = lines.map((line) => {
+            const out: string[] = []
+            let cur = ""
+            let q = false
+            for (let i = 0; i < line.length; i++) {
+              const c = line[i]
+              if (c === '"') {
+                q = !q
+              } else if ((c === "," && !q) || c === ";") {
+                out.push(cur.trim())
+                cur = ""
+              } else {
+                cur += c
+              }
+            }
+            out.push(cur.trim())
+            return out
+          })
+          resolve(rows)
+          return
+        }
+        const wb = XLSX.read(ab, { type: "array" })
+        const sh = wb.Sheets[wb.SheetNames[0]]
+        const rows = XLSX.utils.sheet_to_json<string[]>(sh, { header: 1, defval: "" }) as string[][]
+        resolve(rows.map((r) => r.map((c) => (c == null ? "" : String(c)).trim())))
+      } catch (err) {
+        reject(err)
+      }
+    }
+    reader.onerror = () => reject(new Error("Neizdevās nolasīt failu"))
+    reader.readAsArrayBuffer(file)
+  })
+}
+
+function normYes(v: string): boolean {
+  const s = v.trim().toLowerCase()
+  return s === "jā" || s === "ja" || s === "yes" || s === "y" || s === "1" || s === "true"
+}
+
+function normalizeDateCell(v: string): string | null {
+  const s = v.trim()
+  if (/^\d{4}-\d{2}-\d{2}$/.test(s)) return s
+  const d = new Date(s)
+  if (!Number.isNaN(d.getTime())) return d.toISOString().slice(0, 10)
+  return null
+}
+
+export function TasksImportDialog(props: {
+  open: boolean
+  onOpenChange: (o: boolean) => void
+  projectId: string
+  streams: StreamOpt[]
+  profiles: ProfileOpt[]
+  existingTasks: TaskOpt[]
+  onImported: () => void
+}) {
+  const { open, onOpenChange, projectId, streams, profiles, existingTasks, onImported } = props
+  const [step, setStep] = useState<"upload" | "map" | "preview">("upload")
+  const [rawRows, setRawRows] = useState<string[][]>([])
+  const [headers, setHeaders] = useState<string[]>([])
+  const [mapping, setMapping] = useState<Record<number, TargetKey>>({})
+  const [loading, setLoading] = useState(false)
+  const [err, setErr] = useState<string | null>(null)
+
+  const emailToProfileId = useMemo(() => {
+    const m = new Map<string, string>()
+    for (const p of profiles) {
+      const em = p.email?.trim().toLowerCase()
+      if (em) m.set(em, p.id)
+    }
+    return m
+  }, [profiles])
+
+  const streamNameToId = useMemo(() => {
+    const m = new Map<string, string>()
+    for (const s of streams) {
+      m.set(s.name.trim().toLowerCase(), s.id)
+    }
+    return m
+  }, [streams])
+
+  async function onFile(f: File | null) {
+    if (!f) return
+    setErr(null)
+    setLoading(true)
+    try {
+      const grid = await parseRawGrid(f)
+      if (grid.length < 2) {
+        setErr("Fails ir tukšs vai bez datu rindām.")
+        setLoading(false)
+        return
+      }
+      const h = grid[0].map((c, i) => (c.trim() ? c.trim() : `Kolonna ${i + 1}`))
+      setHeaders(h)
+      setRawRows(grid.slice(1))
+      const init: Record<number, TargetKey> = {}
+      h.forEach((col, i) => {
+        const low = col.toLowerCase()
+        if (low.includes("name") || low.includes("nosauk") || low.includes("title") || low.includes("uzdev"))
+          init[i] = "name"
+        else if (low.includes("hour") || low.includes("stund") || low.includes("estimate") || low.includes("laiks"))
+          init[i] = "estimated_hours"
+        else if (low.includes("mail") || low.includes("e-p") || low.includes("assign"))
+          init[i] = "assignee"
+        else if (low.includes("prior"))
+          init[i] = "priority"
+        else if (low.includes("status"))
+          init[i] = "status"
+        else if (low.includes("stream") || low.includes("straum"))
+          init[i] = "stream"
+        else if (low.includes("start"))
+          init[i] = "start_date"
+        else if (low.includes("end") || low.includes("due") || low.includes("term"))
+          init[i] = "end_date"
+        else if (low.includes("depend") || low.includes("atkar"))
+          init[i] = "depends_on"
+        else if (low.includes("parallel") || low.includes("paral"))
+          init[i] = "parallel"
+        else init[i] = "_skip"
+      })
+      setMapping(init)
+      setStep("map")
+    } catch (e) {
+      setErr((e as Error).message)
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const preview = useMemo(() => {
+    if (rawRows.length === 0) return []
+    const colByTarget = new Map<TargetKey, number>()
+    for (const [idxStr, key] of Object.entries(mapping)) {
+      if (key === "_skip") continue
+      colByTarget.set(key, Number(idxStr))
+    }
+    const need = (k: TargetKey) => colByTarget.get(k)
+
+    const out: {
+      tempId: string
+      title: string
+      estimate_hours: number
+      assignee_id: string | null
+      stream_id: string | null
+      priority: string
+      status: string
+      start_date: string | null
+      due_date: string | null
+      dependsTitle: string | null
+      parallelRaw: string | null
+    }[] = []
+
+    rawRows.forEach((row, ri) => {
+      const nameCol = need("name")
+      const hCol = need("estimated_hours")
+      if (nameCol == null || hCol == null) return
+      const title = (row[nameCol] ?? "").trim()
+      const hoursRaw = (row[hCol] ?? "").trim().replace(",", ".")
+      const hours = Number(hoursRaw)
+      if (!title || Number.isNaN(hours)) return
+
+      let assignee_id: string | null = null
+      const ac = need("assignee")
+      if (ac != null) {
+        const em = (row[ac] ?? "").trim().toLowerCase()
+        assignee_id = emailToProfileId.get(em) ?? null
+      }
+
+      let stream_id: string | null = null
+      const sc = need("stream")
+      if (sc != null) {
+        const sn = (row[sc] ?? "").trim().toLowerCase()
+        stream_id = streamNameToId.get(sn) ?? null
+      }
+
+      const pc = need("priority")
+      const priority = pc != null ? (row[pc] ?? "").trim().toLowerCase() : "medium"
+
+      const stc = need("status")
+      const status = stc != null ? (row[stc] ?? "").trim().toLowerCase() : "todo"
+
+      const sdc = need("start_date")
+      const start_date =
+        sdc != null && (row[sdc] ?? "").trim()
+          ? normalizeDateCell(row[sdc] ?? "")
+          : null
+      const edc = need("end_date")
+      const due_date =
+        edc != null && (row[edc] ?? "").trim()
+          ? normalizeDateCell(row[edc] ?? "")
+          : null
+
+      const dc = need("depends_on")
+      const dependsTitle = dc != null ? (row[dc] ?? "").trim() || null : null
+
+      const pyc = need("parallel")
+      const parallelRaw = pyc != null ? (row[pyc] ?? "").trim() || null : null
+
+      out.push({
+        tempId: `t${ri}`,
+        title,
+        estimate_hours: hours,
+        assignee_id,
+        stream_id,
+        priority,
+        status,
+        start_date,
+        due_date,
+        dependsTitle,
+        parallelRaw,
+      })
+    })
+    return out
+  }, [rawRows, mapping, emailToProfileId, streamNameToId])
+
+  const titleToPreviewTempId = useMemo(() => {
+    const m = new Map<string, string>()
+    for (const p of preview) {
+      m.set(p.title.trim().toLowerCase(), p.tempId)
+    }
+    return m
+  }, [preview])
+
+  const existingTitleToId = useMemo(() => {
+    const m = new Map<string, string>()
+    for (const t of existingTasks) {
+      m.set(t.title.trim().toLowerCase(), t.id)
+    }
+    return m
+  }, [existingTasks])
+
+  function mappingValid() {
+    const vals = Object.values(mapping)
+    return vals.includes("name") && vals.includes("estimated_hours")
+  }
+
+  async function confirmImport() {
+    setErr(null)
+    setLoading(true)
+    try {
+      const tasksPayload = preview.map((p) => ({
+        temp_id: p.tempId,
+        title: p.title,
+        estimate_hours: p.estimate_hours,
+        assignee_id: p.assignee_id,
+        stream_id: p.stream_id,
+        priority: p.priority,
+        status: p.status,
+        start_date: p.start_date,
+        due_date: p.due_date,
+        manual_override: false,
+      }))
+
+      const dependencies: {
+        task_temp_id: string
+        type: "sequential" | "parallel"
+        predecessor_temp_id?: string | null
+        predecessor_task_id?: string | null
+      }[] = []
+
+      for (const p of preview) {
+        if (!p.dependsTitle) continue
+        const key = p.dependsTitle.trim().toLowerCase()
+        const predTemp = titleToPreviewTempId.get(key)
+        const predExisting = existingTitleToId.get(key)
+        const parallel = p.parallelRaw != null ? normYes(p.parallelRaw) : false
+        const type: "sequential" | "parallel" = parallel ? "parallel" : "sequential"
+        if (predTemp) {
+          dependencies.push({ task_temp_id: p.tempId, type, predecessor_temp_id: predTemp })
+        } else if (predExisting) {
+          dependencies.push({ task_temp_id: p.tempId, type, predecessor_task_id: predExisting })
+        }
+      }
+
+      const res = await fetch("/api/tasks/import", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ project_id: projectId, tasks: tasksPayload, dependencies }),
+      })
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.error ?? "Importa kļūda")
+      onImported()
+      onOpenChange(false)
+      setStep("upload")
+      setRawRows([])
+    } catch (e) {
+      setErr((e as Error).message)
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  return (
+    <Dialog
+      open={open}
+      onOpenChange={(o) => {
+        if (!o) {
+          setStep("upload")
+          setRawRows([])
+          setErr(null)
+        }
+        onOpenChange(o)
+      }}
+    >
+      <DialogContent className="sm:max-w-3xl max-h-[90vh] overflow-y-auto">
+        <DialogHeader>
+          <DialogTitle>Importēt uzdevumus (CSV / Excel)</DialogTitle>
+        </DialogHeader>
+
+        {step === "upload" && (
+          <div className="space-y-3">
+            <p className="text-sm text-muted-foreground">
+              Obligāti lauki pēc kartēšanas: nosaukums un plānotās stundas. Atlasiet projektu sānjoslā pirms importa.
+            </p>
+            <label
+              htmlFor="tasks-import-file"
+              className="flex flex-col items-center justify-center border-2 border-dashed rounded-lg p-8 cursor-pointer hover:bg-muted/50"
+            >
+              <Upload className="h-8 w-8 text-muted-foreground mb-2" />
+              <span className="text-sm">Izvēlieties .csv vai .xlsx</span>
+              <input
+                id="tasks-import-file"
+                type="file"
+                accept=".csv,.xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+                className="sr-only"
+                onChange={(e) => onFile(e.target.files?.[0] ?? null)}
+              />
+            </label>
+            {loading && <p className="text-sm">Nolasa…</p>}
+          </div>
+        )}
+
+        {step === "map" && (
+          <div className="space-y-3">
+            <p className="text-sm">Katrai kolonnai izvēlieties lauku.</p>
+            <div className="grid gap-2 max-h-[40vh] overflow-y-auto pr-1">
+              {headers.map((h, i) => (
+                <div key={i} className="flex items-center gap-2 flex-wrap">
+                  <span className="text-xs w-40 truncate font-medium" title={h}>
+                    {h}
+                  </span>
+                  <Select
+                    value={mapping[i] ?? "_skip"}
+                    onValueChange={(v) => setMapping((m) => ({ ...m, [i]: v as TargetKey }))}
+                  >
+                    <SelectTrigger className="h-8 flex-1 min-w-[200px] text-xs">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {TARGETS.map((t) => (
+                        <SelectItem key={t.key} value={t.key}>
+                          {t.label}
+                          {t.required ? " *" : ""}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              ))}
+            </div>
+            {!mappingValid() && (
+              <p className="text-sm text-destructive">Jānorāda vismaz nosaukuma un stundu kolonnas.</p>
+            )}
+            <DialogFooter className="gap-2 sm:gap-0">
+              <Button variant="outline" onClick={() => setStep("upload")}>
+                Atpakaļ
+              </Button>
+              <Button disabled={!mappingValid()} onClick={() => setStep("preview")}>
+                Priekšskatījums
+              </Button>
+            </DialogFooter>
+          </div>
+        )}
+
+        {step === "preview" && (
+          <div className="space-y-3">
+            <p className="text-sm text-muted-foreground">
+              Pirms apstiprināšanas pārbaudiet {preview.length} uzdevumus.
+            </p>
+            <div className="rounded-md border max-h-[45vh] overflow-auto">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead className="text-xs">Nosaukums</TableHead>
+                    <TableHead className="text-xs">Stundas</TableHead>
+                    <TableHead className="text-xs">Straume</TableHead>
+                    <TableHead className="text-xs">Atkarīgs no</TableHead>
+                    <TableHead className="text-xs">Tips</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {preview.map((p) => (
+                    <TableRow key={p.tempId}>
+                      <TableCell className="text-xs font-medium">{p.title}</TableCell>
+                      <TableCell className="text-xs">{p.estimate_hours}</TableCell>
+                      <TableCell className="text-xs">
+                        {p.stream_id ? streams.find((s) => s.id === p.stream_id)?.name ?? "—" : "—"}
+                      </TableCell>
+                      <TableCell className="text-xs">{p.dependsTitle ?? "—"}</TableCell>
+                      <TableCell className="text-xs">
+                        {p.parallelRaw != null && normYes(p.parallelRaw) ? "Paralēls" : "Secīgs"}
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </div>
+            {err && <p className="text-sm text-destructive">{err}</p>}
+            <DialogFooter className="gap-2 sm:gap-0">
+              <Button variant="outline" onClick={() => setStep("map")}>
+                Atpakaļ
+              </Button>
+              <Button onClick={confirmImport} disabled={loading || preview.length === 0}>
+                {loading ? "Importē…" : "Apstiprināt importu"}
+              </Button>
+            </DialogFooter>
+          </div>
+        )}
+      </DialogContent>
+    </Dialog>
+  )
+}

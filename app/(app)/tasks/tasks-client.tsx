@@ -28,7 +28,8 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog"
-import { Plus, Pencil, Trash2, User, Calendar, GripVertical, AlertTriangle, Link2 } from "lucide-react"
+import { Plus, Pencil, Trash2, User, Calendar, GripVertical, AlertTriangle, Link2, Upload } from "lucide-react"
+import { TasksImportDialog } from "./tasks-import-dialog"
 
 interface Profile {
   id: string
@@ -184,6 +185,7 @@ export function TasksClient({
   const [filterStream, setFilterStream] = useState("all")
   const [filterAssignee, setFilterAssignee] = useState("all")
   const [filterPriority, setFilterPriority] = useState("all")
+  const [importOpen, setImportOpen] = useState(false)
 
   useEffect(() => {
     setTasks(
@@ -420,11 +422,34 @@ export function TasksClient({
             </p>
           )}
         </div>
-        <Button onClick={() => openCreate()}>
-          <Plus className="h-4 w-4" />
-          Jauns uzdevums
-        </Button>
+        <div className="flex gap-2">
+          {selectedProjectId && (
+            <Button variant="outline" onClick={() => setImportOpen(true)}>
+              <Upload className="h-4 w-4" />
+              Importēt
+            </Button>
+          )}
+          <Button onClick={() => openCreate()}>
+            <Plus className="h-4 w-4" />
+            Jauns uzdevums
+          </Button>
+        </div>
       </div>
+
+      {selectedProjectId && (
+        <TasksImportDialog
+          open={importOpen}
+          onOpenChange={setImportOpen}
+          projectId={selectedProjectId}
+          streams={streams}
+          profiles={profiles}
+          existingTasks={tasks.map((t) => ({ id: t.id, title: t.title }))}
+          onImported={() => {
+            router.refresh()
+            void recalculate()
+          }}
+        />
+      )}
 
       <div className="flex gap-2 flex-wrap">
         <Select value={filterStream} onValueChange={setFilterStream}>
