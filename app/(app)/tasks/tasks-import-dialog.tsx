@@ -34,6 +34,7 @@ type TaskOpt = { id: string; title: string }
 
 type TargetKey =
   | "_skip"
+  | "project"
   | "name"
   | "description"
   | "estimated_hours"
@@ -48,6 +49,7 @@ type TargetKey =
 
 const TARGETS: { key: TargetKey; label: string; required?: boolean }[] = [
   { key: "_skip", label: "— ignorēt —" },
+  { key: "project", label: "Projekts (nosaukums)" },
   { key: "name", label: "Nosaukums (virsraksts)", required: true },
   { key: "description", label: "Apraksts" },
   { key: "estimated_hours", label: "Plānotās stundas", required: true },
@@ -63,9 +65,10 @@ const TARGETS: { key: TargetKey; label: string; required?: boolean }[] = [
 
 /** Veidne: pirmā rinda — instrukcijas, otrā — lauku nosaukumi (title, …). */
 const IMPORT_TEMPLATE_INSTRUCTION_ROW = [
+  "Projekta nosaukums; ja nav atrasts, importa laikā tiks izveidots automātiski.",
   "Obligāts. Īss uzdevuma nosaukums.",
   "Brīvas formas apraksts (nav obligāts).",
-  "Straumes nosaukums kā projektā; ja tukšs — bez straumes.",
+  "Straumes nosaukums; ja nav atrasta projektā, importa laikā tiks izveidota automātiski. Ja tukšs — bez straumes.",
   "Izpildītāja e-pasts (kā sistēmas profilā).",
   "Prioritāte: augsta / vidēja / zema vai high / medium / low / critical.",
   "Statuss: todo, in_progress, review, done.",
@@ -77,6 +80,7 @@ const IMPORT_TEMPLATE_INSTRUCTION_ROW = [
 ]
 
 const IMPORT_TEMPLATE_HEADER_ROW = [
+  "project",
   "title",
   "description",
   "stream",
@@ -92,6 +96,7 @@ const IMPORT_TEMPLATE_HEADER_ROW = [
 
 const IMPORT_TEMPLATE_EXAMPLE_ROWS: string[][] = [
   [
+    "E-komercijas platforma",
     "Ārkārtas kļūdu labojums",
     "Novērst reģistrācijas kļūdu mobilajā skatā.",
     "Backend",
@@ -105,6 +110,7 @@ const IMPORT_TEMPLATE_EXAMPLE_ROWS: string[][] = [
     "nē",
   ],
   [
+    "E-komercijas platforma",
     "API dokumentācija",
     "OpenAPI specifikācija un pieprasījumu piemēri.",
     "Backend",
@@ -118,6 +124,7 @@ const IMPORT_TEMPLATE_EXAMPLE_ROWS: string[][] = [
     "nē",
   ],
   [
+    "Mārketinga portāls",
     "Izvietošana staging",
     "Automātisks deploy un smoke testi.",
     "DevOps",
@@ -298,7 +305,9 @@ export function TasksImportDialog(props: {
       const init: Record<number, TargetKey> = {}
       h.forEach((col, i) => {
         const low = col.toLowerCase()
-        if (low === "title" || low.includes("name") || low.includes("nosauk") || low.includes("uzdev"))
+        if (low.includes("project") || low.includes("projek"))
+          init[i] = "project"
+        else if (low === "title" || low.includes("name") || low.includes("nosauk") || low.includes("uzdev"))
           init[i] = "name"
         else if (low.includes("descr") || low.includes("aprakst"))
           init[i] = "description"
@@ -342,11 +351,13 @@ export function TasksImportDialog(props: {
 
     const out: {
       tempId: string
+      project_name: string | null
       title: string
       description: string | null
       estimate_hours: number
       assignee_id: string | null
       stream_id: string | null
+      stream_name: string | null
       priority: string
       status: string
       start_date: string | null
@@ -356,9 +367,12 @@ export function TasksImportDialog(props: {
     }[] = []
 
     rawRows.forEach((row, ri) => {
+      const projectCol = need("project")
       const nameCol = need("name")
       const hCol = need("estimated_hours")
       if (nameCol == null || hCol == null) return
+      const project_name =
+        projectCol != null && (row[projectCol] ?? "").trim() ? (row[projectCol] ?? "").trim() : null
       const title = (row[nameCol] ?? "").trim()
       const hoursRaw = (row[hCol] ?? "").trim().replace(",", ".")
       const hours = Number(hoursRaw)
@@ -372,10 +386,14 @@ export function TasksImportDialog(props: {
       }
 
       let stream_id: string | null = null
+      let stream_name: string | null = null
       const sc = need("stream")
       if (sc != null) {
-        const sn = (row[sc] ?? "").trim().toLowerCase()
-        stream_id = streamNameToId.get(sn) ?? null
+        const streamRaw = (row[sc] ?? "").trim()
+        if (streamRaw) {
+          stream_name = streamRaw
+          stream_id = streamNameToId.get(streamRaw.toLowerCase()) ?? null
+        }
       }
 
       const pc = need("priority")
@@ -408,11 +426,13 @@ export function TasksImportDialog(props: {
 
       out.push({
         tempId: `t${ri}`,
+        project_name,
         title,
         description,
         estimate_hours: hours,
         assignee_id,
         stream_id,
+        stream_name,
         priority,
         status,
         start_date,
@@ -445,9 +465,13 @@ export function TasksImportDialog(props: {
     return vals.includes("name") && vals.includes("estimated_hours")
   }
 
+  const hasProjectMapping = Object.values(mapping).includes("project")
+  const hasProjectValues = preview.some((p) => (p.project_name ?? "").trim().length > 0)
+  const canSubmitImport = loading ? false : preview.length > 0 && (canImport || (hasProjectMapping && hasProjectValues))
+
   async function confirmImport() {
-    if (!projectId) {
-      setErr("Atlasiet projektu sānjoslā vai izmantojiet saiti ar ?project_id=…")
+    if (!canImport && !(hasProjectMapping && hasProjectValues)) {
+      setErr("Atlasiet projektu sānjoslā vai importa failā aizpildiet projekta kolonnu.")
       return
     }
     setErr(null)
@@ -455,11 +479,13 @@ export function TasksImportDialog(props: {
     try {
       const tasksPayload = preview.map((p) => ({
         temp_id: p.tempId,
+        project_name: p.project_name,
         title: p.title,
         description: p.description,
         estimate_hours: p.estimate_hours,
         assignee_id: p.assignee_id,
         stream_id: p.stream_id,
+        stream_name: p.stream_id ? null : p.stream_name,
         priority: normalizePriorityForApi(p.priority),
         status: p.status,
         start_date: p.start_date,
@@ -491,7 +517,7 @@ export function TasksImportDialog(props: {
       const res = await fetch("/api/tasks/import", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ project_id: projectId, tasks: tasksPayload, dependencies }),
+        body: JSON.stringify({ default_project_id: projectId, tasks: tasksPayload, dependencies }),
       })
       const data = await res.json()
       if (!res.ok) throw new Error(data.error ?? "Importa kļūda")
@@ -533,7 +559,9 @@ export function TasksImportDialog(props: {
             )}
             <p className="text-sm text-muted-foreground">
               Obligāti lauki pēc kartēšanas: nosaukums un plānotās stundas.
-              {canImport ? " Varat augšupielādēt failu." : " Pēc projekta atlases varēsiet augšupielādēt failu."}
+              {canImport
+                ? " Ja projektu kolonna nav norādīta, tiks izmantots atlasītais projekts."
+                : " Ja projekts nav atlasīts, failā jābūt projekta kolonnai ar nosaukumu katrai rindai."}
             </p>
             <Button
               type="button"
@@ -618,11 +646,13 @@ export function TasksImportDialog(props: {
           <div className="space-y-3">
             <p className="text-sm text-muted-foreground">
               Pirms apstiprināšanas pārbaudiet {preview.length} uzdevumus.
+              {!canImport && " Bez atlasīta projekta jābūt aizpildītai projekta kolonnai importa failā."}
             </p>
             <div className="rounded-md border max-h-[45vh] overflow-auto">
               <Table>
                 <TableHeader>
                   <TableRow>
+                    <TableHead className="text-xs">Projekts</TableHead>
                     <TableHead className="text-xs">Nosaukums</TableHead>
                     <TableHead className="text-xs">Apraksts</TableHead>
                     <TableHead className="text-xs">Stundas</TableHead>
@@ -634,13 +664,18 @@ export function TasksImportDialog(props: {
                 <TableBody>
                   {preview.map((p) => (
                     <TableRow key={p.tempId}>
+                      <TableCell className="text-xs">{p.project_name ?? (projectId ? "Atlasītais projekts" : "—")}</TableCell>
                       <TableCell className="text-xs font-medium">{p.title}</TableCell>
                       <TableCell className="text-xs max-w-[140px] truncate" title={p.description ?? undefined}>
                         {p.description ?? "—"}
                       </TableCell>
                       <TableCell className="text-xs">{p.estimate_hours}</TableCell>
                       <TableCell className="text-xs">
-                        {p.stream_id ? streams.find((s) => s.id === p.stream_id)?.name ?? "—" : "—"}
+                        {p.stream_id
+                          ? streams.find((s) => s.id === p.stream_id)?.name ?? p.stream_name ?? "—"
+                          : p.stream_name
+                            ? `${p.stream_name} (jauna)`
+                            : "—"}
                       </TableCell>
                       <TableCell className="text-xs">{p.dependsTitle ?? "—"}</TableCell>
                       <TableCell className="text-xs">
@@ -658,7 +693,7 @@ export function TasksImportDialog(props: {
               </Button>
               <Button
                 onClick={confirmImport}
-                disabled={loading || preview.length === 0 || !canImport}
+                disabled={!canSubmitImport}
               >
                 {loading ? "Importē…" : "Apstiprināt importu"}
               </Button>

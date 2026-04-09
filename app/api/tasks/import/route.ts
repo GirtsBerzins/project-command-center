@@ -4,11 +4,13 @@ import { computeTaskSchedule, type ScheduleDepInput, type ScheduleTaskInput } fr
 
 type ImportTaskIn = {
   temp_id: string
+  project_name?: string | null
   title: string
   estimate_hours: number
   description?: string | null
   assignee_id?: string | null
   stream_id?: string | null
+  stream_name?: string | null
   priority?: string
   status?: string
   start_date?: string | null
@@ -32,36 +34,128 @@ export async function POST(request: Request) {
     const {
       data: { user },
     } = await supabase.auth.getUser()
-    if (!user) {
+    const userId = user?.id ?? null
+    if (!userId) {
       return NextResponse.json({ error: "Nav autorizācijas" }, { status: 401 })
     }
 
     const body = (await request.json()) as {
-      project_id?: string
+      default_project_id?: string
       tasks?: ImportTaskIn[]
       dependencies?: ImportDepIn[]
     }
-    const projectId = typeof body.project_id === "string" ? body.project_id : null
+    const defaultProjectId = typeof body.default_project_id === "string" ? body.default_project_id : null
     const taskRows = Array.isArray(body.tasks) ? body.tasks : []
     const depRows = Array.isArray(body.dependencies) ? body.dependencies : []
 
-    if (!projectId) {
-      return NextResponse.json({ error: "Trūkst project_id" }, { status: 400 })
-    }
     if (taskRows.length === 0) {
       return NextResponse.json({ error: "Nav importējamo rindu" }, { status: 400 })
     }
 
-    const { data: streams } = await supabase.from("streams").select("id").eq("project_id", projectId)
-    const streamIds = new Set((streams ?? []).map((s) => s.id))
+    const { data: projects } = await supabase.from("projects").select("id, name, start_date")
+    const projectNameToId = new Map<string, string>()
+    const projectStartById = new Map<string, string | null>()
+    for (const p of projects ?? []) {
+      if (p.name?.trim()) {
+        projectNameToId.set(p.name.trim().toLowerCase(), p.id)
+      }
+      projectStartById.set(p.id, p.start_date ?? null)
+    }
+
+    const streamsByProject = new Map<string, { ids: Set<string>; nameToId: Map<string, string> }>()
+    async function ensureStreamsForProject(projectId: string): Promise<void> {
+      if (streamsByProject.has(projectId)) return
+      const { data: streams } = await supabase.from("streams").select("id, name").eq("project_id", projectId)
+      const ids = new Set<string>()
+      const nameToId = new Map<string, string>()
+      for (const s of streams ?? []) {
+        ids.add(s.id)
+        if (s.name?.trim()) {
+          nameToId.set(s.name.trim().toLowerCase(), s.id)
+        }
+      }
+      streamsByProject.set(projectId, { ids, nameToId })
+    }
+
+    async function ensureProjectIdForRow(row: ImportTaskIn): Promise<string | null> {
+      const fromRow = row.project_name?.trim() ?? ""
+      if (fromRow) {
+        const key = fromRow.toLowerCase()
+        const existing = projectNameToId.get(key)
+        if (existing) return existing
+        const { data: created, error: projectErr } = await supabase
+          .from("projects")
+          .insert({ name: fromRow, owner_id: userId })
+          .select("id, start_date")
+          .single()
+        if (projectErr || !created) {
+          throw new Error(`Neizdevās izveidot projektu "${fromRow}": ${projectErr?.message ?? "nezināma kļūda"}`)
+        }
+        projectNameToId.set(key, created.id)
+        projectStartById.set(created.id, created.start_date ?? null)
+        return created.id
+      }
+      return defaultProjectId
+    }
+
+    async function resolveStreamIdForRow(projectId: string, row: ImportTaskIn): Promise<string | null> {
+      await ensureStreamsForProject(projectId)
+      const cache = streamsByProject.get(projectId)!
+      if (row.stream_id && cache.ids.has(row.stream_id)) {
+        return row.stream_id
+      }
+      const streamName = row.stream_name?.trim() ?? ""
+      if (!streamName) return null
+      const key = streamName.toLowerCase()
+      const existing = cache.nameToId.get(key)
+      if (existing) return existing
+      const { data: createdStream, error: streamErr } = await supabase
+        .from("streams")
+        .insert({
+          name: streamName,
+          project_id: projectId,
+          owner_id: userId,
+        })
+        .select("id")
+        .single()
+      if (streamErr || !createdStream) {
+        throw new Error(`Neizdevās izveidot straumi "${streamName}": ${streamErr?.message ?? "nezināma kļūda"}`)
+      }
+      cache.ids.add(createdStream.id)
+      cache.nameToId.set(key, createdStream.id)
+      return createdStream.id
+    }
 
     const tempToReal = new Map<string, string>()
+    const affectedProjectIds = new Set<string>()
 
     for (const row of taskRows) {
       if (!row.title?.trim() || row.estimate_hours == null || Number.isNaN(Number(row.estimate_hours))) {
         return NextResponse.json({ error: `Nederīga rinda: ${row.temp_id}` }, { status: 400 })
       }
-      const streamId = row.stream_id && streamIds.has(row.stream_id) ? row.stream_id : null
+      let projectId: string | null = null
+      try {
+        projectId = await ensureProjectIdForRow(row)
+      } catch (e) {
+        return NextResponse.json({ error: (e as Error).message }, { status: 400 })
+      }
+      if (!projectId) {
+        return NextResponse.json(
+          {
+            error:
+              `Rindai ${row.temp_id} nav noteikts projekts. ` +
+              "Atlasiet projektu sānjoslā vai aizpildiet kolonu 'project'.",
+          },
+          { status: 400 },
+        )
+      }
+      affectedProjectIds.add(projectId)
+      let streamId: string | null = null
+      try {
+        streamId = await resolveStreamIdForRow(projectId, row)
+      } catch (e) {
+        return NextResponse.json({ error: (e as Error).message }, { status: 400 })
+      }
       const priority = ALLOWED_PRIORITY.has(row.priority ?? "") ? row.priority! : "medium"
       const status = ALLOWED_STATUS.has(row.status ?? "") ? row.status! : "todo"
 
@@ -110,28 +204,26 @@ export async function POST(request: Request) {
       }
     }
 
-    const { data: project } = await supabase
-      .from("projects")
-      .select("start_date")
-      .eq("id", projectId)
-      .maybeSingle()
+    const { data: allDeps } = await supabase.from("task_dependencies").select("task_id, depends_on_task_id, type")
+    for (const projectId of affectedProjectIds) {
+      await ensureStreamsForProject(projectId)
+      const streamIds = [...(streamsByProject.get(projectId)?.ids ?? [])]
+      if (streamIds.length === 0) continue
 
-    if (streamIds.size > 0) {
       const { data: taskList } = await supabase
         .from("tasks")
         .select("id, estimate_hours, start_date, due_date, manual_override, stream_id")
-        .in("stream_id", [...streamIds])
+        .in("stream_id", streamIds)
 
       const tasks = (taskList ?? []) as ScheduleTaskInput[]
       const taskIds = new Set(tasks.map((t) => t.id))
-      const { data: allDeps } = await supabase.from("task_dependencies").select("task_id, depends_on_task_id, type")
       const dependencies = (allDeps ?? []).filter(
         (x) => taskIds.has(x.task_id) && taskIds.has(x.depends_on_task_id),
       ) as ScheduleDepInput[]
 
       const today = new Date()
       const projectStart =
-        project?.start_date ??
+        projectStartById.get(projectId) ??
         `${today.getUTCFullYear()}-${String(today.getUTCMonth() + 1).padStart(2, "0")}-${String(today.getUTCDate()).padStart(2, "0")}`
 
       const { updates } = computeTaskSchedule({ projectStart, tasks, dependencies })
