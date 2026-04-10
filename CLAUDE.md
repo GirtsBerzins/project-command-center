@@ -11,7 +11,7 @@
 **Mērķis:** Samazināt sānjoslas kognitīvo slodzi, grupējot saistītās sadaļas.
 
 - [x] **1.1** Izveido `<PlanningDropdown>` apakšizvēlni ar iekšā: Streams, Tasks, Milestones
-- [ ] **1.2** Izveido `<AnalyticsDropdown>` apakšizvēlni ar iekšā: KPIs, Reports
+- [x] **1.2** Izveido `<AnalyticsDropdown>` apakšizvēlni ar iekšā: KPIs, Reports
 - [ ] **1.3** Apvieno Team + Profiles vienā sadaļā `Team`
 - [ ] **1.4** Pārbaudi, ka visi esošie routes joprojām darbojas pēc navigācijas pārkārtošanas
 - [ ] **1.5** Vizuāli tests — mobilais un desktop sānjoslas skats
@@ -84,6 +84,21 @@
 - [ ] **6.3** `/reports/[id]/public` route — nav nepieciešama autentifikācija, tikai lasīšana
 - [ ] **6.4** Pievieno Slack webhook konfigurāciju Settings lapā (owner/manager) — iknedēļas auto-sūtīšana
 - [ ] **6.5** Eksporta pogas UI — dropdown ar 3 opcijām: Markdown / PDF / Copy link
+
+---
+
+## FĀZE 7 — Komandas kontekstuālais skats
+
+**Priekšnosacījums:** Fāze 2 jābūt pabeigtai (`?project_id=` URL-first pieeja strādā).
+
+**Mērķis:** `/team` lapa rāda kontekstuālu komandu — atkarībā no tā vai ir aktīvs projekts.
+
+- [ ] **7.1** Bez projekta konteksta (`/team`) — rāda **visus** organizācijas locekļus ar lomām
+- [ ] **7.2** Ar projekta kontekstu (`/team?project_id=123`) — rāda **tikai šī projekta** locekļus + viņu lomas šajā projektā
+- [ ] **7.3** Pievieno vizuālu indikatoru — "Rāda: [Projekta nosaukums] komanda" kad aktīvs projekts, "Rāda: Visi locekļi" bez projekta
+- [ ] **7.4** "Pievienot locekli" poga — ja aktīvs projekts, pievieno tieši šim projektam; bez projekta — pievieno organizācijai
+- [ ] **7.5** Komandas noslodzes widget (pārvietots no Dashboard Fāzē 5) — rāda tikai aktīvā projekta noslodzi
+- [ ] **7.6** Tests: pārslēdzies starp projektiem sānjoslā → komandas saraksts atjauninās automātiski
 
 ---
 

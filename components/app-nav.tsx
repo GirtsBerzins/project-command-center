@@ -16,6 +16,7 @@ import {
   Flag,
   ChevronDown,
   ClipboardList,
+  TrendingUp,
 } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { createClient } from "@/lib/supabase/client"
@@ -45,6 +46,11 @@ const planningItems = [
   { href: "/streams",    label: "Straumes",        icon: Layers },
   { href: "/tasks",      label: "Uzdevumi",        icon: CheckSquare },
   { href: "/milestones", label: "Atskaišu punkti", icon: Flag },
+]
+
+const analyticsItems = [
+  { href: "/kpis",     label: "KPI",       icon: BarChart2 },
+  { href: "/reports",  label: "Atskaites", icon: FileText },
 ]
 
 const bottomNavItems = [
@@ -117,6 +123,13 @@ export function AppNav({ initialRole }: { initialRole?: Role }) {
   useEffect(() => {
     if (isPlanningActive) setPlanningOpen(true)
   }, [isPlanningActive])
+
+  const isAnalyticsActive = analyticsItems.some((item) => pathname.startsWith(item.href))
+  const [analyticsOpen, setAnalyticsOpen] = useState(isAnalyticsActive)
+
+  useEffect(() => {
+    if (isAnalyticsActive) setAnalyticsOpen(true)
+  }, [isAnalyticsActive])
 
   useEffect(() => {
     setStoredProject(readStoredProject())
@@ -252,6 +265,38 @@ export function AppNav({ initialRole }: { initialRole?: Role }) {
             active={pathname.startsWith(href)}
           />
         ))}
+
+        {/* Analytics dropdown */}
+        <button
+          type="button"
+          onClick={() => setAnalyticsOpen((o) => !o)}
+          className={cn(
+            "w-full flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium transition-colors",
+            isAnalyticsActive
+              ? "bg-sidebar-accent text-sidebar-accent-foreground"
+              : "text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground",
+          )}
+        >
+          <TrendingUp className="h-4 w-4 shrink-0" />
+          <span className="flex-1 text-left">Analītika</span>
+          <ChevronDown
+            className={cn("h-3.5 w-3.5 shrink-0 opacity-60 transition-transform", analyticsOpen && "rotate-180")}
+          />
+        </button>
+        {analyticsOpen && (
+          <div className="space-y-0.5">
+            {analyticsItems.map(({ href, label, icon }) => (
+              <NavLink
+                key={href}
+                href={hrefWithProject(href, activeProjectId)}
+                label={label}
+                icon={icon}
+                active={pathname.startsWith(href)}
+                indent
+              />
+            ))}
+          </div>
+        )}
 
         {(myRole === "owner" || myRole === "manager") && (
           <NavLink
