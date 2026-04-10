@@ -25,14 +25,16 @@ export default async function TasksPage({ searchParams }: { searchParams?: Promi
     streamsQuery.eq("project_id", projectId)
   }
 
-  const [{ data: tasks }, { data: streams }, { data: profiles }, { data: me }] = await Promise.all([
-    tasksQuery,
-    streamsQuery,
-    supabase.from("profiles").select("id, full_name, email").order("full_name"),
-    user
-      ? supabase.from("profiles").select("role").eq("id", user.id).maybeSingle()
-      : Promise.resolve({ data: null }),
-  ])
+  const [{ data: tasks }, { data: streams }, { data: profiles }, { data: me }, { data: allProjects }] =
+    await Promise.all([
+      tasksQuery,
+      streamsQuery,
+      supabase.from("profiles").select("id, full_name, email").order("full_name"),
+      user
+        ? supabase.from("profiles").select("role").eq("id", user.id).maybeSingle()
+        : Promise.resolve({ data: null }),
+      supabase.from("projects").select("id, name").order("name"),
+    ])
 
   const taskList = tasks ?? []
   const taskIds = taskList.map((t) => t.id)
@@ -74,6 +76,7 @@ export default async function TasksPage({ searchParams }: { searchParams?: Promi
       projectStartDate={projectRow?.start_date ?? null}
       myRole={myRole}
       initialMilestones={milestoneRows ?? []}
+      importProjects={(allProjects ?? []) as { id: string; name: string }[]}
     />
   )
 }

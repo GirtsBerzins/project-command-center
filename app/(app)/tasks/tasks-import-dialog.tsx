@@ -1,8 +1,9 @@
 "use client"
 
-import { useMemo, useState } from "react"
+import { useEffect, useMemo, useState } from "react"
 import * as XLSX from "xlsx"
 import { Button } from "@/components/ui/button"
+import { Label } from "@/components/ui/label"
 import {
   Dialog,
   DialogContent,
@@ -26,9 +27,9 @@ import {
   TableRow,
 } from "@/components/ui/table"
 import { Download, Upload } from "lucide-react"
-import { cn } from "@/lib/utils"
 
 type StreamOpt = { id: string; name: string }
+type ProjectOpt = { id: string; name: string }
 type ProfileOpt = { id: string; full_name: string | null; email?: string | null }
 type TaskOpt = { id: string; title: string }
 
@@ -235,8 +236,40 @@ function normalizeDateCell(v: string): string | null {
       }
     }
   }
+  // Excel serial (numeric date cell → string "46121" or "46121.75")
+  if (/^\d+(\.\d+)?$/.test(s)) {
+    const n = Number(s)
+    if (n >= 1 && n <= 1_000_000) {
+      try {
+        const p = XLSX.SSF.parse_date_code(n)
+        if (
+          p &&
+          p.y >= 1970 &&
+          p.y <= 2130 &&
+          p.m >= 1 &&
+          p.m <= 12 &&
+          p.d >= 1 &&
+          p.d <= 31
+        ) {
+          const iso = `${p.y}-${String(p.m).padStart(2, "0")}-${String(p.d).padStart(2, "0")}`
+          return iso
+        }
+      } catch {
+        /* ignore */
+      }
+    }
+  }
   const d = new Date(s)
-  if (!Number.isNaN(d.getTime())) return d.toISOString().slice(0, 10)
+  if (!Number.isNaN(d.getTime())) {
+    const y = d.getUTCFullYear()
+    const mo = d.getUTCMonth() + 1
+    const da = d.getUTCDate()
+    const accepted = y >= 1900 && y <= 2100
+    const iso = accepted
+      ? `${y}-${String(mo).padStart(2, "0")}-${String(da).padStart(2, "0")}`
+      : null
+    return iso
+  }
   return null
 }
 
@@ -251,24 +284,47 @@ function normalizePriorityForApi(raw: string): string {
   return "medium"
 }
 
+const NONE_PROJECT = "__none__"
+
 export function TasksImportDialog(props: {
   open: boolean
   onOpenChange: (o: boolean) => void
-  /** Ja nav atlasīts projekts, importu nevar apstiprināt. */
+  /** Atlasītais projekts no URL/sānjosles — dialoga atvēršanā iestata noklusējuma dropdown. */
   projectId: string | null
+  projects: ProjectOpt[]
   streams: StreamOpt[]
   profiles: ProfileOpt[]
   existingTasks: TaskOpt[]
   onImported: () => void
 }) {
-  const { open, onOpenChange, projectId, streams, profiles, existingTasks, onImported } = props
-  const canImport = Boolean(projectId)
+  const { open, onOpenChange, projectId, projects, streams, profiles, existingTasks, onImported } = props
+  const [importDefaultProjectId, setImportDefaultProjectId] = useState<string>(NONE_PROJECT)
   const [step, setStep] = useState<"upload" | "map" | "preview">("upload")
   const [rawRows, setRawRows] = useState<string[][]>([])
   const [headers, setHeaders] = useState<string[]>([])
   const [mapping, setMapping] = useState<Record<number, TargetKey>>({})
   const [loading, setLoading] = useState(false)
   const [err, setErr] = useState<string | null>(null)
+
+  useEffect(() => {
+    if (!open) return
+    if (projectId && projects.some((p) => p.id === projectId)) {
+      setImportDefaultProjectId(projectId)
+    } else {
+      setImportDefaultProjectId(NONE_PROJECT)
+    }
+  }, [open, projectId, projects])
+
+  const effectiveDefaultProjectId =
+    importDefaultProjectId === NONE_PROJECT ? null : importDefaultProjectId
+
+  const projectNameById = useMemo(() => {
+    const m = new Map<string, string>()
+    for (const p of projects) {
+      m.set(p.id, p.name)
+    }
+    return m
+  }, [projects])
 
   const emailToProfileId = useMemo(() => {
     const m = new Map<string, string>()
@@ -466,12 +522,17 @@ export function TasksImportDialog(props: {
   }
 
   const hasProjectMapping = Object.values(mapping).includes("project")
-  const hasProjectValues = preview.some((p) => (p.project_name ?? "").trim().length > 0)
-  const canSubmitImport = loading ? false : preview.length > 0 && (canImport || (hasProjectMapping && hasProjectValues))
+  const allRowsHaveProject = preview.length > 0 && preview.every((p) => (p.project_name ?? "").trim().length > 0)
+  const canSubmitImport =
+    !loading &&
+    preview.length > 0 &&
+    (effectiveDefaultProjectId != null || (hasProjectMapping && allRowsHaveProject))
 
   async function confirmImport() {
-    if (!canImport && !(hasProjectMapping && hasProjectValues)) {
-      setErr("Atlasiet projektu sānjoslā vai importa failā aizpildiet projekta kolonnu.")
+    if (!effectiveDefaultProjectId && (!hasProjectMapping || !allRowsHaveProject)) {
+      setErr(
+        "Izvēlieties noklusējuma projektu augšā vai kartējiet kolonnu «Projekts» un aizpildiet to katrai rindai.",
+      )
       return
     }
     setErr(null)
@@ -517,7 +578,11 @@ export function TasksImportDialog(props: {
       const res = await fetch("/api/tasks/import", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ default_project_id: projectId, tasks: tasksPayload, dependencies }),
+        body: JSON.stringify({
+          default_project_id: effectiveDefaultProjectId,
+          tasks: tasksPayload,
+          dependencies,
+        }),
       })
       const data = await res.json()
       if (!res.ok) throw new Error(data.error ?? "Importa kļūda")
@@ -549,19 +614,35 @@ export function TasksImportDialog(props: {
           <DialogTitle>Importēt uzdevumus (CSV / Excel)</DialogTitle>
         </DialogHeader>
 
+        <div className="space-y-2 pb-1 border-b">
+          <Label htmlFor="import-default-project" className="text-xs font-medium">
+            Noklusējuma projekts
+          </Label>
+          <Select value={importDefaultProjectId} onValueChange={setImportDefaultProjectId}>
+            <SelectTrigger id="import-default-project" className="h-9 text-sm w-full max-w-md">
+              <SelectValue placeholder="Izvēlieties" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value={NONE_PROJECT}>Nav (tikai no faila / kolonnas)</SelectItem>
+              {projects.map((p) => (
+                <SelectItem key={p.id} value={p.id}>
+                  {p.name}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          <p className="text-xs text-muted-foreground">
+            Ja izvēlēts projekts, rindas bez «Projekta» kolonnas tiek piesaistītas tam. Ja «Nav», katrā rindā
+            jānorāda projekts (kolonna <span className="font-mono">project</span>) — ja tāds neeksistē, tiks
+            izveidots.
+          </p>
+        </div>
+
         {step === "upload" && (
           <div className="space-y-3">
-            {!canImport && (
-              <p className="text-sm text-amber-800 dark:text-amber-200 bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-800 rounded-md px-3 py-2">
-                Lai importētu, atlasiet projektu sānjoslē (vai atveriet lapu ar atlasītu projektu). Veidni var
-                lejupielādēt arī bez projekta.
-              </p>
-            )}
             <p className="text-sm text-muted-foreground">
-              Obligāti lauki pēc kartēšanas: nosaukums un plānotās stundas.
-              {canImport
-                ? " Ja projektu kolonna nav norādīta, tiks izmantots atlasītais projekts."
-                : " Ja projekts nav atlasīts, failā jābūt projekta kolonnai ar nosaukumu katrai rindai."}
+              Obligāti lauki pēc kartēšanas: nosaukums un plānotās stundas. Varat augšupielādēt failu jebkurā
+              brīdī; projektu norādiet augšā vai failā.
             </p>
             <Button
               type="button"
@@ -578,19 +659,13 @@ export function TasksImportDialog(props: {
             </p>
             <label
               htmlFor="tasks-import-file"
-              className={cn(
-                "flex flex-col items-center justify-center border-2 border-dashed rounded-lg p-8",
-                canImport ? "cursor-pointer hover:bg-muted/50" : "cursor-not-allowed opacity-50 pointer-events-none",
-              )}
+              className="flex flex-col items-center justify-center border-2 border-dashed rounded-lg p-8 cursor-pointer hover:bg-muted/50"
             >
               <Upload className="h-8 w-8 text-muted-foreground mb-2" />
-              <span className="text-sm">
-                {canImport ? "Izvēlieties .csv vai .xlsx" : "Vispirms atlasiet projektu"}
-              </span>
+              <span className="text-sm">Izvēlieties .csv vai .xlsx</span>
               <input
                 id="tasks-import-file"
                 type="file"
-                disabled={!canImport}
                 accept=".csv,.xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
                 className="sr-only"
                 onChange={(e) => onFile(e.target.files?.[0] ?? null)}
@@ -646,7 +721,8 @@ export function TasksImportDialog(props: {
           <div className="space-y-3">
             <p className="text-sm text-muted-foreground">
               Pirms apstiprināšanas pārbaudiet {preview.length} uzdevumus.
-              {!canImport && " Bez atlasīta projekta jābūt aizpildītai projekta kolonnai importa failā."}
+              {!effectiveDefaultProjectId &&
+                " Ja augšā nav izvēlēts noklusējuma projekts, katrai rindai jābūt projektam failā."}
             </p>
             <div className="rounded-md border max-h-[45vh] overflow-auto">
               <Table>
@@ -664,7 +740,13 @@ export function TasksImportDialog(props: {
                 <TableBody>
                   {preview.map((p) => (
                     <TableRow key={p.tempId}>
-                      <TableCell className="text-xs">{p.project_name ?? (projectId ? "Atlasītais projekts" : "—")}</TableCell>
+                      <TableCell className="text-xs">
+                        {p.project_name?.trim()
+                          ? p.project_name
+                          : effectiveDefaultProjectId
+                            ? projectNameById.get(effectiveDefaultProjectId) ?? "—"
+                            : "—"}
+                      </TableCell>
                       <TableCell className="text-xs font-medium">{p.title}</TableCell>
                       <TableCell className="text-xs max-w-[140px] truncate" title={p.description ?? undefined}>
                         {p.description ?? "—"}

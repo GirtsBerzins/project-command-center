@@ -161,6 +161,7 @@ interface Props {
   projectStartDate?: string | null
   myRole?: "owner" | "manager" | "member" | "viewer"
   initialMilestones?: MilestoneRow[]
+  importProjects?: { id: string; name: string }[]
 }
 
 export function TasksClient({
@@ -172,6 +173,7 @@ export function TasksClient({
   projectStartDate: _projectStartDate,
   myRole,
   initialMilestones = [],
+  importProjects = [],
 }: Props) {
   const router = useRouter()
   const supabase = createClient()
@@ -487,6 +489,7 @@ export function TasksClient({
         open={importOpen}
         onOpenChange={setImportOpen}
         projectId={selectedProjectId ?? null}
+        projects={importProjects}
         streams={streams}
         profiles={profiles}
         existingTasks={tasks.map((t) => ({ id: t.id, title: t.title }))}
