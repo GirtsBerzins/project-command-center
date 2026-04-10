@@ -5,6 +5,7 @@ export interface StoredProject {
   name: string
 }
 
+/** @deprecated Use the setProject function returned by useProjectContext instead. */
 export function updateSelectedProject(project: StoredProject | null) {
   if (typeof window === "undefined") return
 
@@ -21,4 +22,14 @@ export function updateSelectedProject(project: StoredProject | null) {
     url.searchParams.delete("project_id")
   }
   window.location.href = url.pathname + (url.search ? `?${url.searchParams.toString()}` : "")
+}
+
+/**
+ * Copies the current page URL with ?project_id= appended (or updated) to the clipboard.
+ * Returns a promise that resolves when the text is copied.
+ */
+export function copyProjectLink(projectId: string): Promise<void> {
+  const url = new URL(window.location.href)
+  url.searchParams.set("project_id", projectId)
+  return navigator.clipboard.writeText(url.toString())
 }

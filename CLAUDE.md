@@ -13,8 +13,8 @@
 - [x] **1.1** Izveido `<PlanningDropdown>` apakšizvēlni ar iekšā: Streams, Tasks, Milestones
 - [x] **1.2** Izveido `<AnalyticsDropdown>` apakšizvēlni ar iekšā: KPIs, Reports
 - [x] **1.3** Apvieno Team + Profiles vienā sadaļā `Team`
-- [ ] **1.4** Pārbaudi, ka visi esošie routes joprojām darbojas pēc navigācijas pārkārtošanas
-- [ ] **1.5** Vizuāli tests — mobilais un desktop sānjoslas skats
+- [x] **1.4** Pārbaudi, ka visi esošie routes joprojām darbojas pēc navigācijas pārkārtošanas
+- [x] **1.5** Vizuāli tests — mobilais un desktop sānjoslas skats
 
 ---
 
@@ -22,11 +22,11 @@
 
 **Mērķis:** Novērst situāciju, kad jaunā cilnē pazūd projekta konteksts.
 
-- [ ] **2.1** Refaktorē `useProjectContext` hook — `project_id` vienmēr rakstīt URL-ā kā primāro avotu
-- [ ] **2.2** localStorage izmantot tikai kā fallback, ja URL parametrs nav
-- [ ] **2.3** Izveido `<NoProjectSelected>` stāvokļa skatu — rāda dropdown "Izvēlies projektu", nevis lādē klusē
-- [ ] **2.4** Izveido `copyProjectLink()` utility — automātiski pievieno `?project_id=` kopētajai saitei
-- [ ] **2.5** Pievieno "Share" pogu projekta header — izmanto `copyProjectLink()`
+- [x] **2.1** Refaktorē `useProjectContext` hook — `project_id` vienmēr rakstīt URL-ā kā primāro avotu
+- [x] **2.2** localStorage izmantot tikai kā fallback, ja URL parametrs nav
+- [x] **2.3** Izveido `<NoProjectSelected>` stāvokļa skatu — rāda dropdown "Izvēlies projektu", nevis lādē klusē
+- [x] **2.4** Izveido `copyProjectLink()` utility — automātiski pievieno `?project_id=` kopētajai saitei
+- [x] **2.5** Pievieno "Share" pogu projekta header — izmanto `copyProjectLink()`
 - [ ] **2.6** Tests: atver jaunu cilni bez parametra → jāredz `<NoProjectSelected>`, nevis kļūda vai nepareizs projekts
 
 ---

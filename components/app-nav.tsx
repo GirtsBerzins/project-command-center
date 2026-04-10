@@ -1,7 +1,7 @@
 "use client"
 
 import Link from "next/link"
-import { usePathname, useSearchParams } from "next/navigation"
+import { usePathname } from "next/navigation"
 import {
   LayoutDashboard,
   Layers,
@@ -17,6 +17,9 @@ import {
   ChevronDown,
   ClipboardList,
   TrendingUp,
+  X,
+  Link2,
+  Check,
 } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { createClient } from "@/lib/supabase/client"
@@ -29,7 +32,8 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
 import { useEffect, useState } from "react"
-import { PROJECT_STORAGE_KEY, type StoredProject, updateSelectedProject } from "@/lib/project-selection"
+import { useProjectContext } from "@/hooks/use-project-context"
+import { copyProjectLink } from "@/lib/project-selection"
 
 interface NavProject {
   id: string
@@ -58,16 +62,6 @@ const bottomNavItems = [
 ]
 
 type Role = "owner" | "manager" | "member" | "viewer"
-
-function readStoredProject(): StoredProject | null {
-  if (typeof window === "undefined") return null
-  try {
-    const raw = window.localStorage.getItem(PROJECT_STORAGE_KEY)
-    return raw ? (JSON.parse(raw) as StoredProject) : null
-  } catch {
-    return null
-  }
-}
 
 /** Pievieno ?project_id=… ja atlasīts konkrēts projekts (saglabā kontekstu starp lapām). */
 function hrefWithProject(base: string, projectId: string | null): string {
@@ -106,16 +100,15 @@ function NavLink({
   )
 }
 
-export function AppNav({ initialRole }: { initialRole?: Role }) {
+export function AppNav({ initialRole, onMobileClose }: { initialRole?: Role; onMobileClose?: () => void }) {
   const pathname = usePathname()
-  const searchParams = useSearchParams()
-  const searchKey = searchParams.toString()
-  const urlProjectId = searchParams.get("project_id")
   const supabase = createClient()
 
-  const [storedProject, setStoredProject] = useState<StoredProject | null>(null)
+  const { projectId: activeProjectId, projectName, setProject } = useProjectContext()
+
   const [projects, setProjects] = useState<NavProject[]>([])
   const [myRole] = useState<Role | null>(initialRole ?? null)
+  const [copied, setCopied] = useState(false)
 
   const isPlanningActive = planningItems.some((item) => pathname.startsWith(item.href))
   const [planningOpen, setPlanningOpen] = useState(isPlanningActive)
@@ -132,19 +125,6 @@ export function AppNav({ initialRole }: { initialRole?: Role }) {
   }, [isAnalyticsActive])
 
   useEffect(() => {
-    setStoredProject(readStoredProject())
-  }, [pathname, searchKey])
-
-  const activeProjectId = urlProjectId ?? storedProject?.id ?? null
-
-  const displayProjectName =
-    activeProjectId == null
-      ? (storedProject?.name ?? "Visi projekti")
-      : (projects.find((p) => p.id === activeProjectId)?.name ??
-        (storedProject?.id === activeProjectId ? storedProject.name : null) ??
-        "Projekts")
-
-  useEffect(() => {
     let cancelled = false
     ;(async () => {
       const { data } = await supabase.from("projects").select("id, name").order("created_at", { ascending: false }).limit(50)
@@ -155,62 +135,107 @@ export function AppNav({ initialRole }: { initialRole?: Role }) {
     }
   }, [supabase])
 
+  const displayProjectName =
+    activeProjectId == null
+      ? "Visi projekti"
+      : (projects.find((p) => p.id === activeProjectId)?.name ?? projectName ?? "Projekts")
+
+  function handleCopyLink() {
+    if (!activeProjectId) return
+    copyProjectLink(activeProjectId).then(() => {
+      setCopied(true)
+      setTimeout(() => setCopied(false), 2000)
+    })
+  }
+
   async function handleSignOut() {
     await supabase.auth.signOut()
     window.location.href = "/login"
   }
 
   return (
-    <aside className="w-56 shrink-0 border-r bg-sidebar-background min-h-screen flex flex-col">
+    <aside className="w-56 shrink-0 border-r bg-sidebar-background min-h-screen h-full flex flex-col">
       <div className="p-4 border-b">
-        <h1 className="font-bold text-sm tracking-tight text-sidebar-foreground">
-          Command Center
-        </h1>
+        <div className="flex items-center justify-between">
+          <h1 className="font-bold text-sm tracking-tight text-sidebar-foreground">
+            Command Center
+          </h1>
+          {onMobileClose && (
+            <button
+              type="button"
+              onClick={onMobileClose}
+              className="lg:hidden rounded-md p-1 text-sidebar-foreground/60 hover:text-sidebar-foreground hover:bg-sidebar-accent transition-colors"
+              aria-label="Aizvērt navigāciju"
+            >
+              <X className="h-4 w-4" />
+            </button>
+          )}
+        </div>
         <div className="mt-3 space-y-1">
           <p className="text-[11px] font-medium text-sidebar-foreground/70 uppercase tracking-wide">
             Projekts
           </p>
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
+          <div className="flex items-center gap-1">
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <button
+                  type="button"
+                  className={cn(
+                    "flex-1 flex items-center justify-between gap-1 rounded-md border px-2.5 py-1.5 text-xs",
+                    "bg-sidebar-background text-sidebar-foreground hover:bg-sidebar-accent transition-colors",
+                    "outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 ring-offset-sidebar-background",
+                  )}
+                >
+                  <span className="truncate text-left">{displayProjectName}</span>
+                  <ChevronDown className="h-3.5 w-3.5 shrink-0 opacity-60" aria-hidden />
+                </button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent
+                align="start"
+                sideOffset={4}
+                className="w-[var(--radix-dropdown-menu-trigger-width)] min-w-[12rem] max-h-[min(70vh,18rem)] overflow-y-auto"
+              >
+                <DropdownMenuRadioGroup
+                  value={activeProjectId ?? "__all__"}
+                  onValueChange={(v) => {
+                    if (v === "__all__") {
+                      setProject(null, "Visi projekti")
+                      return
+                    }
+                    const proj = projects.find((p) => p.id === v)
+                    if (proj) setProject(proj.id, proj.name)
+                  }}
+                >
+                  <DropdownMenuRadioItem value="__all__" className="text-xs">
+                    Visi projekti
+                  </DropdownMenuRadioItem>
+                  {projects.map((p) => (
+                    <DropdownMenuRadioItem key={p.id} value={p.id} className="text-xs">
+                      {p.name}
+                    </DropdownMenuRadioItem>
+                  ))}
+                </DropdownMenuRadioGroup>
+              </DropdownMenuContent>
+            </DropdownMenu>
+
+            {/* Share button — copies current URL with ?project_id= */}
+            {activeProjectId && (
               <button
                 type="button"
+                onClick={handleCopyLink}
+                title={copied ? "Nokopēts!" : "Kopēt saiti"}
                 className={cn(
-                  "w-full flex items-center justify-between gap-1 rounded-md border px-2.5 py-1.5 text-xs",
-                  "bg-sidebar-background text-sidebar-foreground hover:bg-sidebar-accent transition-colors",
-                  "outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 ring-offset-sidebar-background",
+                  "shrink-0 rounded-md p-1.5 transition-colors",
+                  copied
+                    ? "text-green-600 bg-green-50"
+                    : "text-sidebar-foreground/60 hover:text-sidebar-foreground hover:bg-sidebar-accent",
                 )}
+                aria-label="Kopēt projekta saiti"
               >
-                <span className="truncate text-left">{displayProjectName}</span>
-                <ChevronDown className="h-3.5 w-3.5 shrink-0 opacity-60" aria-hidden />
+                {copied ? <Check className="h-3.5 w-3.5" /> : <Link2 className="h-3.5 w-3.5" />}
               </button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent
-              align="start"
-              sideOffset={4}
-              className="w-[var(--radix-dropdown-menu-trigger-width)] min-w-[12rem] max-h-[min(70vh,18rem)] overflow-y-auto"
-            >
-              <DropdownMenuRadioGroup
-                value={activeProjectId ?? "__all__"}
-                onValueChange={(v) => {
-                  if (v === "__all__") {
-                    updateSelectedProject({ id: null, name: "Visi projekti" })
-                    return
-                  }
-                  const proj = projects.find((p) => p.id === v)
-                  if (proj) updateSelectedProject({ id: proj.id, name: proj.name })
-                }}
-              >
-                <DropdownMenuRadioItem value="__all__" className="text-xs">
-                  Visi projekti
-                </DropdownMenuRadioItem>
-                {projects.map((p) => (
-                  <DropdownMenuRadioItem key={p.id} value={p.id} className="text-xs">
-                    {p.name}
-                  </DropdownMenuRadioItem>
-                ))}
-              </DropdownMenuRadioGroup>
-            </DropdownMenuContent>
-          </DropdownMenu>
+            )}
+          </div>
         </div>
       </div>
       <nav className="flex-1 p-2 space-y-1">
