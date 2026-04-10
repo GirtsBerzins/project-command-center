@@ -493,6 +493,7 @@ export function TasksClient({
         streams={streams}
         profiles={profiles}
         existingTasks={tasks.map((t) => ({ id: t.id, title: t.title }))}
+        canManageStreams={myRole === "owner" || myRole === "manager"}
         onImported={() => {
           router.refresh()
           void recalculate()

@@ -17,6 +17,9 @@ type ImportTaskIn = {
   start_date?: string | null
   due_date?: string | null
   manual_override?: boolean
+  budget_total?: number | null
+  executor_type?: string | null
+  retention_pct?: number | null
 }
 
 type ImportDepIn = {
@@ -179,6 +182,7 @@ export async function POST(request: Request) {
       const priority = ALLOWED_PRIORITY.has(row.priority ?? "") ? row.priority! : "medium"
       const status = ALLOWED_STATUS.has(row.status ?? "") ? row.status! : "todo"
 
+      const ALLOWED_EXECUTOR = new Set(["darbinieks", "apakšuzņēmējs"])
       const { data: inserted, error: insErr } = await supabase
         .from("tasks")
         .insert({
@@ -192,6 +196,11 @@ export async function POST(request: Request) {
           start_date: row.start_date ?? null,
           due_date: row.due_date ?? null,
           manual_override: row.manual_override ?? false,
+          // Budžeta lauki (client nodrošina ka nāk tikai no owner/manager)
+          budget_total: row.budget_total ?? null,
+          executor_type: ALLOWED_EXECUTOR.has(row.executor_type ?? "") ? row.executor_type : null,
+          retention_pct: row.retention_pct != null && row.retention_pct >= 0 && row.retention_pct <= 1
+            ? row.retention_pct : null,
         })
         .select("id")
         .single()

@@ -30,7 +30,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table"
-import { Download, Upload } from "lucide-react"
+import { AlertTriangle, Download, Upload } from "lucide-react"
 
 type StreamOpt = { id: string; name: string }
 type ProjectOpt = { id: string; name: string }
@@ -51,8 +51,11 @@ type TargetKey =
   | "end_date"
   | "depends_on"
   | "parallel"
+  | "budget_total"
+  | "executor_type"
+  | "retention_pct"
 
-const TARGETS: { key: TargetKey; label: string; required?: boolean }[] = [
+const TARGETS: { key: TargetKey; label: string; required?: boolean; budgetOnly?: boolean }[] = [
   { key: "_skip", label: "— ignorēt —" },
   { key: "project", label: "Projekts (nosaukums)" },
   { key: "name", label: "Nosaukums (virsraksts)", required: true },
@@ -66,81 +69,106 @@ const TARGETS: { key: TargetKey; label: string; required?: boolean }[] = [
   { key: "end_date", label: "Beigu / termiņa datums" },
   { key: "depends_on", label: "Atkarīgs no (nosaukums)" },
   { key: "parallel", label: "Paralēls (jā/nē)" },
+  { key: "budget_total", label: "Tāmes summa (budget_total)", budgetOnly: true },
+  { key: "executor_type", label: "Izpildītāja tips (darbinieks / apakšuzņēmējs)", budgetOnly: true },
+  { key: "retention_pct", label: "Ieturējums % (0.35 vai 35)", budgetOnly: true },
 ]
+
+const BUDGET_KEYS: TargetKey[] = ["budget_total", "executor_type", "retention_pct"]
 
 /** Veidne: pirmā rinda — instrukcijas, otrā — lauku nosaukumi (title, …). */
 const IMPORT_TEMPLATE_INSTRUCTION_ROW = [
   "Projekta nosaukums; ja nav atrasts, importa laikā tiks izveidots automātiski.",
+  "Straumes nosaukums; ja nav atrasta projektā, tiks izveidota automātiski (owner/manager). Ja tukšs — bez straumes.",
   "Obligāts. Īss uzdevuma nosaukums.",
   "Brīvas formas apraksts (nav obligāts).",
-  "Straumes nosaukums; ja nav atrasta projektā, importa laikā tiks izveidota automātiski. Ja tukšs — bez straumes.",
-  "Izpildītāja e-pasts (kā sistēmas profilā).",
-  "Prioritāte: augsta / vidēja / zema vai high / medium / low / critical.",
-  "Statuss: todo, in_progress, review, done.",
+  "Plānotās stundas (skaitlis; importam obligāti jāaizpilda vai jākartē).",
   "Sākuma datums: dd.mm.gggg vai YYYY-MM-DD.",
   "Termiņš: dd.mm.gggg vai YYYY-MM-DD.",
-  "Plānotās stundas (skaitlis; importam obligāti jāaizpilda vai jākartē).",
   "Cita uzdevuma nosaukums (šajā failā vai jau sistēmā) priekštečam.",
   "Paralēla atkarība: jā vai nē (noklusējums — secīga).",
+  "Prioritāte: augsta / vidēja / zema vai high / medium / low / critical.",
+  "Statuss: todo, in_progress, review, done.",
+  "Izpildītāja e-pasts (kā sistēmas profilā).",
+  "Tāmes summa (skaitlis). Redzama tikai owner/manager.",
+  "Izpildītāja tips: darbinieks vai apakšuzņēmējs.",
+  "Ieturējuma % kā decimāls (0.35) vai procenti (35). Darbinieks ≈ 35%, apakšuzņ. ≈ 15%.",
+  "Automātiski aprēķināts: budget_total × (1 − retention_pct). Neaizpildīt.",
 ]
 
 const IMPORT_TEMPLATE_HEADER_ROW = [
   "project",
+  "stream",
   "title",
   "description",
-  "stream",
-  "assignee_email",
-  "priority",
-  "status",
+  "estimated_hours",
   "start_date",
   "end_date",
-  "estimated_hours",
   "depends_on",
   "parallel",
+  "priority",
+  "status",
+  "assignee_email",
+  "budget_total",
+  "executor_type",
+  "retention_pct",
+  "budget_net",
 ]
 
 const IMPORT_TEMPLATE_EXAMPLE_ROWS: string[][] = [
   [
     "E-komercijas platforma",
+    "Backend",
     "Ārkārtas kļūdu labojums",
     "Novērst reģistrācijas kļūdu mobilajā skatā.",
-    "Backend",
-    "jana@piemers.lv",
-    "augsta",
-    "in_progress",
+    "6",
     "02.04.2026",
     "05.04.2026",
-    "6",
     "",
     "nē",
+    "augsta",
+    "in_progress",
+    "jana@piemers.lv",
+    "1200",
+    "darbinieks",
+    "0.35",
+    "",
   ],
   [
     "E-komercijas platforma",
+    "Backend",
     "API dokumentācija",
     "OpenAPI specifikācija un pieprasījumu piemēri.",
-    "Backend",
+    "12",
     "",
+    "15.04.2026",
+    "Ārkārtas kļūdu labojums",
+    "nē",
     "vidēja",
     "todo",
     "",
-    "15.04.2026",
-    "12",
-    "Ārkārtas kļūdu labojums",
-    "nē",
+    "2400",
+    "apakšuzņēmējs",
+    "0.15",
+    "",
   ],
   [
     "Mārketinga portāls",
+    "DevOps",
     "Izvietošana staging",
     "Automātisks deploy un smoke testi.",
-    "DevOps",
-    "peteris@piemers.lv",
-    "zema",
-    "review",
+    "3",
     "10.04.2026",
     "11.04.2026",
-    "3",
     "API dokumentācija",
     "jā",
+    "zema",
+    "review",
+    "peteris@piemers.lv",
+    "",
+    "",
+    "",
+    "",
   ],
 ]
 
@@ -302,8 +330,10 @@ export function TasksImportDialog(props: {
   profiles: ProfileOpt[]
   existingTasks: TaskOpt[]
   onImported: () => void
+  /** Vai lietotājam ir tiesības izveidot jaunas straumes (owner/manager). */
+  canManageStreams?: boolean
 }) {
-  const { open, onOpenChange, projectId, projects, streams, profiles, existingTasks, onImported } = props
+  const { open, onOpenChange, projectId, projects, streams, profiles, existingTasks, onImported, canManageStreams = false } = props
   const [importDefaultProjectId, setImportDefaultProjectId] = useState<string>(NONE_PROJECT)
   const [step, setStep] = useState<"upload" | "map" | "preview">("upload")
   const [rawRows, setRawRows] = useState<string[][]>([])
@@ -349,6 +379,12 @@ export function TasksImportDialog(props: {
     return m
   }, [streams])
 
+  // Budžeta kolonnas pieejamas tikai owner/manager kartēšanā (8.7)
+  const availableTargets = useMemo(
+    () => canManageStreams ? TARGETS : TARGETS.filter(t => !BUDGET_KEYS.includes(t.key)),
+    [canManageStreams]
+  )
+
   async function onFile(f: File | null) {
     if (!f) return
     setErr(null)
@@ -391,6 +427,14 @@ export function TasksImportDialog(props: {
           init[i] = "depends_on"
         else if (low.includes("parallel") || low.includes("paral"))
           init[i] = "parallel"
+        else if (low === "budget_total" || low === "budget" || low.includes("tāmes") || low.includes("tames"))
+          init[i] = canManageStreams ? "budget_total" : "_skip"
+        else if (low === "executor_type" || low.includes("executor") || low.includes("izpild") && low.includes("tips"))
+          init[i] = canManageStreams ? "executor_type" : "_skip"
+        else if (low === "retention_pct" || low.includes("retention") || low.includes("ieturē") || low.includes("ieture"))
+          init[i] = canManageStreams ? "retention_pct" : "_skip"
+        else if (low === "budget_net")
+          init[i] = "_skip" // auto-aprēķināts, nekad nemapē
         else init[i] = "_skip"
       })
       setMapping(init)
@@ -426,6 +470,9 @@ export function TasksImportDialog(props: {
       due_date: string | null
       dependsTitle: string | null
       parallelRaw: string | null
+      budget_total: number | null
+      executor_type: string | null
+      retention_pct: number | null
     }[] = []
 
     rawRows.forEach((row, ri) => {
@@ -486,6 +533,23 @@ export function TasksImportDialog(props: {
       const pyc = need("parallel")
       const parallelRaw = pyc != null ? (row[pyc] ?? "").trim() || null : null
 
+      const btc = need("budget_total")
+      const btRaw = btc != null ? (row[btc] ?? "").trim().replace(",", ".") : ""
+      const budget_total = btRaw ? (Number.isNaN(Number(btRaw)) ? null : Number(btRaw)) : null
+
+      const etc = need("executor_type")
+      const executor_type = etc != null ? (row[etc] ?? "").trim() || null : null
+
+      const rpc = need("retention_pct")
+      let retention_pct: number | null = null
+      if (rpc != null && (row[rpc] ?? "").trim()) {
+        const rpRaw = Number((row[rpc] ?? "").trim().replace(",", "."))
+        if (!Number.isNaN(rpRaw)) {
+          // Atbalsta gan decimālu (0.35), gan procentus (35)
+          retention_pct = rpRaw > 1 ? rpRaw / 100 : rpRaw
+        }
+      }
+
       out.push({
         tempId: `t${ri}`,
         project_name,
@@ -501,6 +565,9 @@ export function TasksImportDialog(props: {
         due_date,
         dependsTitle,
         parallelRaw,
+        budget_total,
+        executor_type,
+        retention_pct,
       })
     })
     return out
@@ -529,9 +596,15 @@ export function TasksImportDialog(props: {
 
   const hasProjectMapping = Object.values(mapping).includes("project")
   const allRowsHaveProject = preview.length > 0 && preview.every((p) => (p.project_name ?? "").trim().length > 0)
+  // Rindas ar jaunu straumi ko lietotājs nevar izveidot — bloķē importu
+  const hasUnresolvableStreams =
+    !canManageStreams && preview.some((p) => !p.stream_id && !!p.stream_name)
+  // Fails satur budžeta datus bet lietotājam nav tiesību — brīdinājums (8.8)
+  const hasBudgetData = !canManageStreams && preview.some((p) => p.budget_total != null)
   const canSubmitImport =
     !loading &&
     preview.length > 0 &&
+    !hasUnresolvableStreams &&
     (effectiveDefaultProjectId != null || (hasProjectMapping && allRowsHaveProject))
 
   async function confirmImport() {
@@ -558,6 +631,10 @@ export function TasksImportDialog(props: {
         start_date: p.start_date,
         due_date: p.due_date,
         manual_override: false,
+        // Budžeta lauki — tikai owner/manager (8.7)
+        budget_total: canManageStreams ? p.budget_total : null,
+        executor_type: canManageStreams ? p.executor_type : null,
+        retention_pct: canManageStreams ? p.retention_pct : null,
       }))
 
       const dependencies: {
@@ -698,7 +775,7 @@ export function TasksImportDialog(props: {
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
-                      {TARGETS.map((t) => (
+                      {availableTargets.map((t) => (
                         <SelectItem key={t.key} value={t.key}>
                           {t.label}
                           {t.required ? " *" : ""}
@@ -741,6 +818,9 @@ export function TasksImportDialog(props: {
                     <TableHead className="text-xs">Straume</TableHead>
                     <TableHead className="text-xs">Atkarīgs no</TableHead>
                     <TableHead className="text-xs">Tips</TableHead>
+                    {canManageStreams && <TableHead className="text-xs">Tāme</TableHead>}
+                    {canManageStreams && <TableHead className="text-xs">Izpild. tips</TableHead>}
+                    {canManageStreams && <TableHead className="text-xs">Ieturējums</TableHead>}
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -759,21 +839,60 @@ export function TasksImportDialog(props: {
                       </TableCell>
                       <TableCell className="text-xs">{p.estimate_hours}</TableCell>
                       <TableCell className="text-xs">
-                        {p.stream_id
-                          ? streams.find((s) => s.id === p.stream_id)?.name ?? p.stream_name ?? "—"
-                          : p.stream_name
-                            ? `${p.stream_name} (jauna)`
-                            : "—"}
+                        {p.stream_id ? (
+                          streams.find((s) => s.id === p.stream_id)?.name ?? p.stream_name ?? "—"
+                        ) : p.stream_name ? (
+                          canManageStreams ? (
+                            <span className="flex items-center gap-1 text-amber-600">
+                              <AlertTriangle className="h-3 w-3 shrink-0" />
+                              {p.stream_name} <span className="text-muted-foreground">(jauna)</span>
+                            </span>
+                          ) : (
+                            <span className="flex items-center gap-1 text-destructive">
+                              <AlertTriangle className="h-3 w-3 shrink-0" />
+                              {p.stream_name} <span className="font-medium">(nav tiesību)</span>
+                            </span>
+                          )
+                        ) : (
+                          "—"
+                        )}
                       </TableCell>
                       <TableCell className="text-xs">{p.dependsTitle ?? "—"}</TableCell>
                       <TableCell className="text-xs">
                         {p.parallelRaw != null && normYes(p.parallelRaw) ? "Paralēls" : "Secīgs"}
                       </TableCell>
+                      {canManageStreams && (
+                        <TableCell className="text-xs">
+                          {p.budget_total != null ? p.budget_total : "—"}
+                        </TableCell>
+                      )}
+                      {canManageStreams && (
+                        <TableCell className="text-xs">
+                          {p.executor_type ?? "—"}
+                        </TableCell>
+                      )}
+                      {canManageStreams && (
+                        <TableCell className="text-xs">
+                          {p.retention_pct != null ? `${Math.round(p.retention_pct * 100)}%` : "—"}
+                        </TableCell>
+                      )}
                     </TableRow>
                   ))}
                 </TableBody>
               </Table>
             </div>
+            {hasUnresolvableStreams && (
+              <p className="text-sm text-destructive flex items-start gap-1.5">
+                <AlertTriangle className="h-4 w-4 shrink-0 mt-0.5" />
+                Dažas rindas satur straumes kas neeksistē un jums nav tiesību tās izveidot. Izveidojiet straumes manuāli sadaļā Straumes un atkārtojiet importu.
+              </p>
+            )}
+            {hasBudgetData && (
+              <p className="text-sm text-amber-600 flex items-start gap-1.5">
+                <AlertTriangle className="h-4 w-4 shrink-0 mt-0.5" />
+                Fails satur budžeta datus (budget_total u.c.), taču jums nav tiesību tos importēt. Budžeta lauki tiks ignorēti.
+              </p>
+            )}
             {err && <p className="text-sm text-destructive">{err}</p>}
             <DialogFooter className="gap-2 sm:gap-0">
               <Button variant="outline" onClick={() => setStep("map")}>
