@@ -78,7 +78,7 @@ export function MilestonesClient(props: {
 }) {
   const { initialMilestones, projectId, projects, tasks, links: initialLinks, myRole } = props
   const router = useRouter()
-  const supabase = createClient()
+  const supabase = useMemo(() => createClient(), [])
   const [rows, setRows] = useState(initialMilestones)
   const [links, setLinks] = useState(initialLinks)
   const [dialogOpen, setDialogOpen] = useState(false)

@@ -118,8 +118,9 @@
 ### 8B — Importa veidnes kolonnu pārkārtošana
 **Mērķis:** Loģiskāka kolonnu secība — no vispārīgā uz konkrēto, atkarības uzreiz aiz apraksta.
 
-- [ ] **8.5** Pārkārto importa kolonnas šādā secībā:
-  `project → stream → title → description → estimated_hours → start_date → end_date → depends_on → parallel → priority → status → assignee_email`
+- [  ] **8.5** Pārkārto importa kolonnas šādā secībā (references fails: `importa_veidne.xlsx` projekta saknes mapē):
+  `project → stream → title → description → estimated_hours → start_date → end_date → depends_on → parallel → priority → status → assignee_email → budget_total → executor_type → retention_pct → budget_net`
+
 - [ ] **8.6** Pievieno budžeta kolonnas:
   - `budget_total` — tāmes summa (redzama owner/manager)
   - `executor_type` — `darbinieks` vai `apakšuzņēmējs`

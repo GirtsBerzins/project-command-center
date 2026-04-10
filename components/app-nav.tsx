@@ -31,7 +31,7 @@ import {
   DropdownMenuRadioItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
-import { useEffect, useState } from "react"
+import { useEffect, useMemo, useState } from "react"
 import { useProjectContext } from "@/hooks/use-project-context"
 import { copyProjectLink } from "@/lib/project-selection"
 
@@ -102,7 +102,7 @@ function NavLink({
 
 export function AppNav({ initialRole, onMobileClose }: { initialRole?: Role; onMobileClose?: () => void }) {
   const pathname = usePathname()
-  const supabase = createClient()
+  const supabase = useMemo(() => createClient(), [])
 
   const { projectId: activeProjectId, projectName, setProject } = useProjectContext()
 
@@ -133,7 +133,7 @@ export function AppNav({ initialRole, onMobileClose }: { initialRole?: Role; onM
     return () => {
       cancelled = true
     }
-  }, [supabase])
+  }, [])
 
   const displayProjectName =
     activeProjectId == null

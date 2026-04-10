@@ -1,6 +1,6 @@
 "use client"
 
-import { useCallback, useEffect, useState } from "react"
+import { useCallback, useEffect, useMemo, useState } from "react"
 import { useRouter } from "next/navigation"
 import {
   DragDropContext,
@@ -176,7 +176,7 @@ export function TasksClient({
   importProjects = [],
 }: Props) {
   const router = useRouter()
-  const supabase = createClient()
+  const supabase = useMemo(() => createClient(), [])
   const [tasks, setTasks] = useState<Task[]>(() =>
     initialTasks.map((t) => ({
       ...t,
@@ -268,7 +268,7 @@ export function TasksClient({
       await recalculate()
       router.refresh()
     },
-    [supabase, recalculate, router],
+    [recalculate, router],
   )
 
   useEffect(() => {
@@ -302,7 +302,7 @@ export function TasksClient({
     return () => {
       supabase.removeChannel(channel)
     }
-  }, [supabase, profiles, streams])
+  }, [profiles, streams])
 
   async function onDragEnd(result: DropResult) {
     if (!result.destination) return

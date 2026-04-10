@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useMemo, useState } from "react"
 import {
   LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip,
   ReferenceLine, ResponsiveContainer,
@@ -80,7 +80,7 @@ interface Props {
 }
 
 export function KpisClient({ initialKpis, profiles, selectedProjectId, selectedProjectName }: Props) {
-  const supabase = createClient()
+  const supabase = useMemo(() => createClient(), [])
   const [kpis, setKpis]               = useState<Kpi[]>(initialKpis)
   const [dialogOpen, setDialogOpen]   = useState(false)
   const [editingKpi, setEditingKpi]   = useState<Kpi | null>(null)

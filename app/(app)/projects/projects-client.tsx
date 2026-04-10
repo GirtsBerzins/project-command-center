@@ -121,7 +121,7 @@ interface Props {
 }
 
 export function ProjectsClient({ initialProjects, profiles }: Props) {
-  const supabase = createClient()
+  const supabase = useMemo(() => createClient(), [])
   const [projects, setProjects] = useState<ProjectWithRelations[]>(initialProjects)
   const [dialogOpen, setDialogOpen] = useState(false)
   const [editingProject, setEditingProject] = useState<ProjectWithRelations | null>(null)

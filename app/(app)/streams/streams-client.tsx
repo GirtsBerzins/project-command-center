@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useState } from "react"
+import { useEffect, useMemo, useState } from "react"
 import { createClient } from "@/lib/supabase/client"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
@@ -118,7 +118,7 @@ export function StreamsClient({
   selectedProjectId,
   selectedProjectName,
 }: Props) {
-  const supabase = createClient()
+  const supabase = useMemo(() => createClient(), [])
   const [streams, setStreams] = useState<Stream[]>(initialStreams)
   const [dialogOpen, setDialogOpen] = useState(false)
   const [editingStream, setEditingStream] = useState<Stream | null>(null)
@@ -176,7 +176,7 @@ export function StreamsClient({
       .subscribe()
 
     return () => { supabase.removeChannel(channel) }
-  }, [supabase, profiles, projects, selectedProjectId])
+  }, [profiles, projects, selectedProjectId])
 
   // ── Dialog helpers ────────────────────────────────────────────────────────
   function openCreate() {

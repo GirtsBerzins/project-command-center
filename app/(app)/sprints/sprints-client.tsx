@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useMemo, useState } from "react"
 import {
   LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip,
   Legend, ResponsiveContainer,
@@ -105,7 +105,7 @@ interface Props {
 }
 
 export function SprintsClient({ initialSprints, allTasks }: Props) {
-  const supabase = createClient()
+  const supabase = useMemo(() => createClient(), [])
   const [sprints, setSprints]             = useState<Sprint[]>(initialSprints)
   const [sprintDialog, setSprintDialog]   = useState(false)
   const [editingSprint, setEditingSprint] = useState<Sprint | null>(null)

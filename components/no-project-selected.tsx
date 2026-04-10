@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useState } from "react"
+import { useEffect, useMemo, useState } from "react"
 import { usePathname } from "next/navigation"
 import { FolderKanban, ChevronDown } from "lucide-react"
 import { createClient } from "@/lib/supabase/client"
@@ -49,6 +49,7 @@ function readStoredId(): string | null {
  */
 export function NoProjectSelected({ children }: { children: React.ReactNode }) {
   const pathname = usePathname()
+  const supabase = useMemo(() => createClient(), [])
   const [projectId, setProjectId] = useState<string | null | undefined>(undefined) // undefined = loading
   const [projects, setProjects] = useState<Project[]>([])
 
@@ -65,7 +66,6 @@ export function NoProjectSelected({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     if (!showPicker) return
-    const supabase = createClient()
     supabase
       .from("projects")
       .select("id, name")

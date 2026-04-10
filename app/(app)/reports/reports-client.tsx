@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useEffect, useMemo, useState } from "react"
 import { createClient } from "@/lib/supabase/client"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
@@ -120,11 +120,17 @@ export function ReportsClient({
   completedTasks, delayedTasks, openRisks,
   activeSprint, savedReports, weekStart, weekEnd, selectedProjectName,
 }: Props) {
-  const supabase = createClient()
+  const supabase = useMemo(() => createClient(), [])
 
   const [reports, setReports]   = useState<SavedReport[]>(savedReports)
   const [saving, setSaving]     = useState(false)
   const [savedMsg, setSavedMsg] = useState(false)
+
+  useEffect(() => {
+    if (!savedMsg) return
+    const t = setTimeout(() => setSavedMsg(false), 3000)
+    return () => clearTimeout(t)
+  }, [savedMsg])
 
   const md = generateMarkdown(weekStart, weekEnd, completedTasks, delayedTasks, openRisks, activeSprint)
 
@@ -167,7 +173,6 @@ export function ReportsClient({
           : [data as SavedReport, ...prev]
       })
       setSavedMsg(true)
-      setTimeout(() => setSavedMsg(false), 3000)
     }
     setSaving(false)
   }
