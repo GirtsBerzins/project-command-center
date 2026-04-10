@@ -1,7 +1,11 @@
 "use client"
 
 import { useEffect, useMemo, useState } from "react"
-import * as XLSX from "xlsx"
+let xlsxModule: typeof import("xlsx") | null = null
+async function getXlsx() {
+  if (!xlsxModule) xlsxModule = await import("xlsx")
+  return xlsxModule
+}
 import { Button } from "@/components/ui/button"
 import { Label } from "@/components/ui/label"
 import {
@@ -140,7 +144,8 @@ const IMPORT_TEMPLATE_EXAMPLE_ROWS: string[][] = [
   ],
 ]
 
-function downloadImportTemplateXlsx() {
+async function downloadImportTemplateXlsx() {
+  const XLSX = await getXlsx()
   const aoa = [IMPORT_TEMPLATE_INSTRUCTION_ROW, IMPORT_TEMPLATE_HEADER_ROW, ...IMPORT_TEMPLATE_EXAMPLE_ROWS]
   const ws = XLSX.utils.aoa_to_sheet(aoa)
   ws["!cols"] = IMPORT_TEMPLATE_HEADER_ROW.map(() => ({ wch: 30 }))
@@ -166,7 +171,7 @@ function splitInstructionsHeadersAndRows(grid: string[][]): { headers: string[];
 function parseRawGrid(file: File): Promise<string[][]> {
   return new Promise((resolve, reject) => {
     const reader = new FileReader()
-    reader.onload = (e) => {
+    reader.onload = async (e) => {
       try {
         const ab = e.target?.result
         if (!ab) {
@@ -198,6 +203,7 @@ function parseRawGrid(file: File): Promise<string[][]> {
           resolve(rows)
           return
         }
+        const XLSX = await getXlsx()
         const wb = XLSX.read(ab, { type: "array" })
         const sh = wb.Sheets[wb.SheetNames[0]]
         const rows = XLSX.utils.sheet_to_json<string[]>(sh, { header: 1, defval: "" }) as string[][]
@@ -237,11 +243,11 @@ function normalizeDateCell(v: string): string | null {
     }
   }
   // Excel serial (numeric date cell → string "46121" or "46121.75")
-  if (/^\d+(\.\d+)?$/.test(s)) {
+  if (xlsxModule && /^\d+(\.\d+)?$/.test(s)) {
     const n = Number(s)
     if (n >= 1 && n <= 1_000_000) {
       try {
-        const p = XLSX.SSF.parse_date_code(n)
+        const p = xlsxModule.SSF.parse_date_code(n)
         if (
           p &&
           p.y >= 1970 &&

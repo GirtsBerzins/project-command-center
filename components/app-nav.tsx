@@ -73,7 +73,7 @@ export function AppNav({ initialRole }: { initialRole?: Role }) {
 
   const [storedProject, setStoredProject] = useState<StoredProject | null>(null)
   const [projects, setProjects] = useState<NavProject[]>([])
-  const [myRole, setMyRole] = useState<Role | null>(initialRole ?? null)
+  const [myRole] = useState<Role | null>(initialRole ?? null)
 
   useEffect(() => {
     setStoredProject(readStoredProject())
@@ -91,7 +91,7 @@ export function AppNav({ initialRole }: { initialRole?: Role }) {
   useEffect(() => {
     let cancelled = false
     ;(async () => {
-      const { data } = await supabase.from("projects").select("id, name").order("created_at", { ascending: false })
+      const { data } = await supabase.from("projects").select("id, name").order("created_at", { ascending: false }).limit(50)
       if (!cancelled) setProjects((data ?? []) as NavProject[])
     })()
     return () => {

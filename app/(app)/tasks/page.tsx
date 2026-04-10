@@ -1,5 +1,5 @@
 import { createClient } from "@/lib/supabase/server"
-import { TasksClient, type TaskDependencyRow } from "./tasks-client"
+import { TasksClient, type Task, type TaskDependencyRow } from "./tasks-client"
 
 export default async function TasksPage({ searchParams }: { searchParams?: Promise<{ project_id?: string }> | { project_id?: string } }) {
   const supabase = await createClient()
@@ -12,7 +12,7 @@ export default async function TasksPage({ searchParams }: { searchParams?: Promi
 
   const tasksQuery = supabase
     .from("tasks")
-    .select("*, profiles(id, full_name, email), streams!inner(id, name, project_id)")
+    .select("id, title, description, stream_id, assignee_id, priority, status, due_date, start_date, calculated_start_date, calculated_end_date, manual_override, estimate_hours, actual_hours, created_at, profiles(id, full_name, email), streams!inner(id, name, project_id)")
     .order("created_at", { ascending: false })
   const streamsQuery = supabase
     .from("streams")
@@ -25,7 +25,7 @@ export default async function TasksPage({ searchParams }: { searchParams?: Promi
     streamsQuery.eq("project_id", projectId)
   }
 
-  const [{ data: tasks }, { data: streams }, { data: profiles }, { data: me }, { data: allProjects }] =
+  const [{ data: tasks }, { data: streams }, { data: profiles }, { data: me }, { data: allProjects }, { data: milestoneRows }] =
     await Promise.all([
       tasksQuery,
       streamsQuery,
@@ -34,6 +34,9 @@ export default async function TasksPage({ searchParams }: { searchParams?: Promi
         ? supabase.from("profiles").select("role").eq("id", user.id).maybeSingle()
         : Promise.resolve({ data: null }),
       supabase.from("projects").select("id, name").order("name"),
+      projectId
+        ? supabase.from("milestones").select("id, title, due_date, status").eq("project_id", projectId)
+        : Promise.resolve({ data: [] as { id: string; title: string; due_date: string | null; status: string }[] }),
     ])
 
   const taskList = tasks ?? []
@@ -62,13 +65,9 @@ export default async function TasksPage({ searchParams }: { searchParams?: Promi
 
   const myRole = (me?.role as "owner" | "manager" | "member" | "viewer" | undefined) ?? undefined
 
-  const { data: milestoneRows } = projectId
-    ? await supabase.from("milestones").select("id, title, due_date, status").eq("project_id", projectId)
-    : { data: [] as { id: string; title: string; due_date: string | null; status: string }[] }
-
   return (
     <TasksClient
-      initialTasks={taskList}
+      initialTasks={taskList as unknown as Task[]}
       streams={streams ?? []}
       profiles={profiles ?? []}
       selectedProjectId={projectId}

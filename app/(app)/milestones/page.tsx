@@ -36,11 +36,6 @@ export default async function MilestonesPage({
 
   if (projectId) milestonesQuery = milestonesQuery.eq("project_id", projectId)
 
-  const [{ data: milestones }, { data: projects }] = await Promise.all([
-    milestonesQuery,
-    supabase.from("projects").select("id, name").order("name"),
-  ])
-
   const tasksQuery = supabase
     .from("tasks")
     .select("id, title, status, streams!inner(id, project_id)")
@@ -48,9 +43,14 @@ export default async function MilestonesPage({
   if (projectId) {
     tasksQuery.eq("streams.project_id", projectId)
   }
-  const { data: tasks } = projectId
-    ? await tasksQuery
-    : { data: [] as { id: string; title: string; status: string }[] }
+
+  const [{ data: milestones }, { data: projects }, { data: tasks }] = await Promise.all([
+    milestonesQuery,
+    supabase.from("projects").select("id, name").order("name"),
+    projectId
+      ? tasksQuery
+      : Promise.resolve({ data: [] as { id: string; title: string; status: string }[] }),
+  ])
 
   const { data: links } =
     milestones && milestones.length > 0
