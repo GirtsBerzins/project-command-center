@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server"
 import { createClient } from "@/lib/supabase/server"
+import { createAdminClient } from "@/lib/supabase/admin"
 import { computeTaskSchedule, type ScheduleDepInput, type ScheduleTaskInput } from "@/lib/task-schedule"
 
 type ImportTaskIn = {
@@ -38,6 +39,14 @@ export async function POST(request: Request) {
     if (!userId) {
       return NextResponse.json({ error: "Nav autorizācijas" }, { status: 401 })
     }
+
+    // 8.1 — fetch org-level role to know if user can create streams
+    const { data: profile } = await supabase
+      .from("profiles")
+      .select("role")
+      .eq("id", userId)
+      .maybeSingle()
+    const canManageStreams = profile?.role === "owner" || profile?.role === "manager"
 
     const body = (await request.json()) as {
       default_project_id?: string
@@ -109,7 +118,18 @@ export async function POST(request: Request) {
       const key = streamName.toLowerCase()
       const existing = cache.nameToId.get(key)
       if (existing) return existing
-      const { data: createdStream, error: streamErr } = await supabase
+
+      // 8.2 — block members/viewers before hitting RLS
+      if (!canManageStreams) {
+        throw new Error(
+          `Nav tiesību izveidot jaunu straumi "${streamName}". ` +
+          "Lūdzu izveidojiet straumi manuāli sadaļā Straumes un atkārtojiet importu.",
+        )
+      }
+
+      // 8.3 — use admin client so stream INSERT bypasses RLS edge-cases for owner/manager
+      const admin = createAdminClient()
+      const { data: createdStream, error: streamErr } = await admin
         .from("streams")
         .insert({
           name: streamName,

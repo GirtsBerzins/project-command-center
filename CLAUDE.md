@@ -102,6 +102,34 @@
 
 ---
 
+## FĀZE 8 — CSV/XLSX importa labojumi
+
+**Mērķis:** Novērst RLS kļūdu importā un uzlabot importa veidnes struktūru.
+
+### 8A — RLS kļūdas labojums
+**Kļūda:** `new row violates row-level security policy for table "streams"`
+**Iemesls:** Importa funkcija mēģina automātiski izveidot jaunu Streamu ja tas neeksistē, bet RLS politika bloķē šo darbību lietotājiem bez owner/manager tiesībām.
+
+- [x] **8.1** Importa loģikā — pirms straumes izveides pārbaudi `profiles` tabulu: vai lietotājam ir `role: owner` vai `role: manager` šajā projektā
+- [x] **8.2** Ja lietotājam nav tiesību izveidot straumi — rāda skaidru kļūdas ziņojumu: *"Nav tiesību izveidot jaunu straumi. Lūdzu izveidojiet straumi manuāli sadaļā Streams un atkārtojiet importu."*
+- [x] **8.3** Ja lietotājam IR tiesības — straumes izveide notiek ar `service_role` vai ar RLS politikas paplašinājumu kas atļauj owner/manager veidot straumes
+- [ ] **8.4** Importa priekšskatījumā — ja straume neeksistē, atzīmē to ar oranžu brīdinājumu pie katras rindas (nevis tikai kļūda pēc apstiprinājuma)
+
+### 8B — Importa veidnes kolonnu pārkārtošana
+**Mērķis:** Loģiskāka kolonnu secība — no vispārīgā uz konkrēto, atkarības uzreiz aiz apraksta.
+
+- [ ] **8.5** Pārkārto importa kolonnas šādā secībā:
+  `project → stream → title → description → estimated_hours → start_date → end_date → depends_on → parallel → priority → status → assignee_email`
+- [ ] **8.6** Pievieno budžeta kolonnas:
+  - `budget_total` — tāmes summa (redzama owner/manager)
+  - `executor_type` — `darbinieks` vai `apakšuzņēmējs`
+  - `retention_pct` — ieturējuma % (darbinieks ≈ 0.35, apakšuzņ. ≈ 0.15)
+  - `budget_net` — automātiski aprēķināts: `budget_total × (1 - retention_pct)`
+- [ ] **8.7** `budget_total` un `budget_net` kolonnas — rādīt tikai lietotājiem ar `role: owner` vai `role: manager`; `member` un `viewer` šīs kolonnas neredz
+- [ ] **8.8** Importa UI — ja fails satur `budget_total` kolonnu un lietotājs nav owner/manager, rāda brīdinājumu ka budžeta dati tiks ignorēti
+
+---
+
 ## Definīcija "Pabeigts" katrai fāzei
 
 Fāze ir pabeigta kad:
