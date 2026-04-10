@@ -15,6 +15,7 @@ import {
   Settings,
   Flag,
   ChevronDown,
+  ClipboardList,
 } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { createClient } from "@/lib/supabase/client"
@@ -28,21 +29,26 @@ import {
 } from "@/components/ui/dropdown-menu"
 import { useEffect, useState } from "react"
 import { PROJECT_STORAGE_KEY, type StoredProject, updateSelectedProject } from "@/lib/project-selection"
+
 interface NavProject {
   id: string
   name: string
 }
 
-const navItems = [
+const topNavItems = [
   { href: "/dashboard", label: "Vadības panelis", icon: LayoutDashboard },
   { href: "/projects",  label: "Projekti",        icon: FolderKanban },
   { href: "/team",      label: "Komanda",         icon: Users },
-  { href: "/streams",   label: "Straumes",        icon: Layers },
-  { href: "/tasks",     label: "Uzdevumi",         icon: CheckSquare },
+]
+
+const planningItems = [
+  { href: "/streams",    label: "Straumes",        icon: Layers },
+  { href: "/tasks",      label: "Uzdevumi",        icon: CheckSquare },
   { href: "/milestones", label: "Atskaišu punkti", icon: Flag },
-  { href: "/sprints",   label: "Sprinti",          icon: Zap },
-  { href: "/kpis",      label: "KPI",              icon: BarChart2 },
-  { href: "/reports",   label: "Atskaites",        icon: FileText },
+]
+
+const bottomNavItems = [
+  { href: "/sprints", label: "Sprinti", icon: Zap },
 ]
 
 type Role = "owner" | "manager" | "member" | "viewer"
@@ -64,6 +70,36 @@ function hrefWithProject(base: string, projectId: string | null): string {
   return `${base}${sep}project_id=${encodeURIComponent(projectId)}`
 }
 
+function NavLink({
+  href,
+  label,
+  icon: Icon,
+  active,
+  indent = false,
+}: {
+  href: string
+  label: string
+  icon: React.ElementType
+  active: boolean
+  indent?: boolean
+}) {
+  return (
+    <Link
+      href={href}
+      className={cn(
+        "flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium transition-colors",
+        indent && "pl-8",
+        active
+          ? "bg-sidebar-accent text-sidebar-accent-foreground"
+          : "text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground",
+      )}
+    >
+      <Icon className="h-4 w-4" />
+      {label}
+    </Link>
+  )
+}
+
 export function AppNav({ initialRole }: { initialRole?: Role }) {
   const pathname = usePathname()
   const searchParams = useSearchParams()
@@ -74,6 +110,13 @@ export function AppNav({ initialRole }: { initialRole?: Role }) {
   const [storedProject, setStoredProject] = useState<StoredProject | null>(null)
   const [projects, setProjects] = useState<NavProject[]>([])
   const [myRole] = useState<Role | null>(initialRole ?? null)
+
+  const isPlanningActive = planningItems.some((item) => pathname.startsWith(item.href))
+  const [planningOpen, setPlanningOpen] = useState(isPlanningActive)
+
+  useEffect(() => {
+    if (isPlanningActive) setPlanningOpen(true)
+  }, [isPlanningActive])
 
   useEffect(() => {
     setStoredProject(readStoredProject())
@@ -158,34 +201,65 @@ export function AppNav({ initialRole }: { initialRole?: Role }) {
         </div>
       </div>
       <nav className="flex-1 p-2 space-y-1">
-        {navItems.map(({ href, label, icon: Icon }) => (
-          <Link
+        {topNavItems.map(({ href, label, icon }) => (
+          <NavLink
             key={href}
             href={hrefWithProject(href, activeProjectId)}
-            className={cn(
-              "flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium transition-colors",
-              pathname.startsWith(href)
-                ? "bg-sidebar-accent text-sidebar-accent-foreground"
-                : "text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
-            )}
-          >
-            <Icon className="h-4 w-4" />
-            {label}
-          </Link>
+            label={label}
+            icon={icon}
+            active={pathname.startsWith(href)}
+          />
         ))}
+
+        {/* Planning dropdown */}
+        <button
+          type="button"
+          onClick={() => setPlanningOpen((o) => !o)}
+          className={cn(
+            "w-full flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium transition-colors",
+            isPlanningActive
+              ? "bg-sidebar-accent text-sidebar-accent-foreground"
+              : "text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground",
+          )}
+        >
+          <ClipboardList className="h-4 w-4 shrink-0" />
+          <span className="flex-1 text-left">Plānošana</span>
+          <ChevronDown
+            className={cn("h-3.5 w-3.5 shrink-0 opacity-60 transition-transform", planningOpen && "rotate-180")}
+          />
+        </button>
+        {planningOpen && (
+          <div className="space-y-0.5">
+            {planningItems.map(({ href, label, icon }) => (
+              <NavLink
+                key={href}
+                href={hrefWithProject(href, activeProjectId)}
+                label={label}
+                icon={icon}
+                active={pathname.startsWith(href)}
+                indent
+              />
+            ))}
+          </div>
+        )}
+
+        {bottomNavItems.map(({ href, label, icon }) => (
+          <NavLink
+            key={href}
+            href={hrefWithProject(href, activeProjectId)}
+            label={label}
+            icon={icon}
+            active={pathname.startsWith(href)}
+          />
+        ))}
+
         {(myRole === "owner" || myRole === "manager") && (
-          <Link
+          <NavLink
             href={hrefWithProject("/settings", activeProjectId)}
-            className={cn(
-              "flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium transition-colors",
-              pathname.startsWith("/settings")
-                ? "bg-sidebar-accent text-sidebar-accent-foreground"
-                : "text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
-            )}
-          >
-            <Settings className="h-4 w-4" />
-            Iestatījumi
-          </Link>
+            label="Iestatījumi"
+            icon={Settings}
+            active={pathname.startsWith("/settings")}
+          />
         )}
       </nav>
       <div className="p-2 border-t">
