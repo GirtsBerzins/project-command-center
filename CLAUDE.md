@@ -70,7 +70,7 @@
   4. Aktivitātes feed (apakšā)
 - [x] **5.2** Komandas noslodzes widget — pārvieto uz `Team` lapu, no Dashboard noņem
 - [x] **5.3** Riska widget — filtrē pēc noklusējuma: rāda tikai `impact: high | critical`
-- [ ] **5.4** Pievieno "Paplašināt" pogu riska widgetam — atver pilnu sarakstu
+- [x] **5.4** Pievieno "Paplašināt" pogu riska widgetam — atver pilnu sarakstu
 - [ ] **5.5** Vizuāls tests — Dashboard ar 0 datiem, ar daļējiem datiem, ar pilniem datiem
 
 ---

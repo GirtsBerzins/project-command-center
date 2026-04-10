@@ -1,10 +1,10 @@
 import { createClient } from "@/lib/supabase/server"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
-import { Badge } from "@/components/ui/badge"
 import { Progress } from "@/components/ui/progress"
 import { ActivitySparkline } from "./activity-sparkline"
-import { AlertTriangle, CheckCircle2, Clock, TrendingUp, Flag, ArrowRight } from "lucide-react"
+import { CheckCircle2, Clock, TrendingUp, Flag, ArrowRight } from "lucide-react"
 import Link from "next/link"
+import { RisksWidget } from "./risks-widget"
 
 interface Stream {
   id: string; name: string; status: string; progress: number; deadline: string | null
@@ -111,11 +111,6 @@ export default async function DashboardPage({ searchParams }: { searchParams?: P
   )
 
   const highCriticalRisks = (risks ?? []) as Risk[]
-  const riskCounts = { high: 0, critical: 0 }
-  for (const r of highCriticalRisks) {
-    if (r.impact === "high") riskCounts.high++
-    if (r.impact === "critical") riskCounts.critical++
-  }
 
   const sprintTasks = activeSprint?.task_sprint ?? []
   const totalTasks = sprintTasks.length
@@ -200,38 +195,8 @@ export default async function DashboardPage({ searchParams }: { searchParams?: P
           </CardContent>
         </Card>
 
-        {/* 5.1 + 5.3 — 2. Kritiskie riski (tikai high/critical) */}
-        <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium flex items-center gap-2">
-              <AlertTriangle className="h-4 w-4 text-yellow-500" />
-              Kritiskie riski
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-2">
-            {highCriticalRisks.length === 0 ? (
-              <p className="text-sm text-muted-foreground">Nav kritisko risku</p>
-            ) : (
-              <>
-                {riskCounts.critical > 0 && (
-                  <div className="flex justify-between items-center">
-                    <span className="text-sm text-muted-foreground">Kritiska</span>
-                    <Badge variant="destructive">{riskCounts.critical}</Badge>
-                  </div>
-                )}
-                {riskCounts.high > 0 && (
-                  <div className="flex justify-between items-center">
-                    <span className="text-sm text-muted-foreground">Augsta</span>
-                    <Badge variant="destructive">{riskCounts.high}</Badge>
-                  </div>
-                )}
-                <p className="text-xs text-muted-foreground pt-1">
-                  {highCriticalRisks.length} augsta prioritāte kopā
-                </p>
-              </>
-            )}
-          </CardContent>
-        </Card>
+        {/* 5.1 + 5.3 + 5.4 — 2. Kritiskie riski */}
+        <RisksWidget risks={highCriticalRisks} />
 
         {/* 5.1 — 3. Tuvākie milestones */}
         {milestoneTotal > 0 && (
