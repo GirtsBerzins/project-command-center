@@ -12,7 +12,7 @@
 
 - [x] **1.1** Izveido `<PlanningDropdown>` apakšizvēlni ar iekšā: Streams, Tasks, Milestones
 - [x] **1.2** Izveido `<AnalyticsDropdown>` apakšizvēlni ar iekšā: KPIs, Reports
-- [ ] **1.3** Apvieno Team + Profiles vienā sadaļā `Team`
+- [x] **1.3** Apvieno Team + Profiles vienā sadaļā `Team`
 - [ ] **1.4** Pārbaudi, ka visi esošie routes joprojām darbojas pēc navigācijas pārkārtošanas
 - [ ] **1.5** Vizuāli tests — mobilais un desktop sānjoslas skats
 
